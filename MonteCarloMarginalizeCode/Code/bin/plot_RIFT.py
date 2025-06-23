@@ -10,7 +10,6 @@ import os
 from scipy.spatial.distance import jensenshannon
 from scipy.stats import gaussian_kde
 from collections import namedtuple
-import sys
 import RIFT.lalsimutils as lsu
 from argparse import ArgumentParser
 import corner
@@ -481,7 +480,7 @@ def plot_neff_data(path_to_main_folder):
     run_diagnostics["cip_std_max_lnL_sampled"] = np.round(np.std(collect_lnL), 3)
     ax.set_title(f"{len(index)} / {len(lnL_files_last_iteration)}")
     ax.set_xticks(np.arange(0, run_diagnostics["latest_iteration"]+1, 1))
-    fig.savefig(path+f"/plots/Neff_plot.png", bbox_inches='tight')
+    fig.savefig(path+f"/plots/Effective_samples_per_worker_plot.png", bbox_inches='tight')
     plt.close(fig)
 
 def plot_cip_max_lnL(path_to_main_folder):
@@ -495,7 +494,6 @@ def plot_cip_max_lnL(path_to_main_folder):
     Args:
         path_to_main_folder (str): The path to the main folder containing iteration subfolders with lnL data files.
 
-    The function saves the plot as 'Sampled_CIP_lnL.png' in a 'plots' subdirectory of the main folder.
     """
     print("\n--> Plotting sampled lnL by CIP")
     iterations = np.arange(0, run_diagnostics["latest_iteration"]+1, 1)
@@ -526,7 +524,7 @@ def plot_cip_max_lnL(path_to_main_folder):
     ax.axhline(y = run_diagnostics['max_lnL'], linestyle = "--", color="black")
     ax.fill_between(iterations, run_diagnostics['max_lnL']-2, run_diagnostics['max_lnL'], color="green", alpha=0.5)
     ax.set_xticks(iterations)
-    fig.savefig(path+f"/plots/Sampled_CIP_lnL.png", bbox_inches="tight")
+    fig.savefig(path+f"/plots/Maximum_sampled_lnL_CIP.png", bbox_inches="tight")
     plt.close()
 
 def plot_histograms(sorted_posterior_file_paths, plot_title, iterations = None, plot_legend = True, JSD = True):
@@ -738,7 +736,7 @@ def plot_JS_divergence(posterior_1_path, posterior_2_path, posterior_3_path=None
         ax.errorbar(parameters, JSD_array_third, np.array(JSD_error_third).T,  color = "green", ecolor = "black", fmt ='o', markersize = 5, label='latest-thirdlatest')
     ax.legend(loc='upper right')
     ax.tick_params(axis='x', labelrotation=60)
-    fig.savefig(path+f"/plots/JSD_{plot_title}.png", bbox_inches='tight')
+    fig.savefig(path+f"/plots/JSD_per_parameter_{plot_title}.png", bbox_inches='tight')
     plt.close(fig)
 
 def write_sample_statistics(posterior, parameters=["mc","eta", "m1", "m2", "s1z", "s2z", "chi_eff"]):
@@ -847,7 +845,7 @@ def plot_exploration_corner(all_net_path):
     else:
         fig = corner.corner(data,  color='cornflowerblue', smooth=None,smooth1d =None, linewidth = 1.0,  plot_datapoints=True, plot_density=False, no_fill_contours=True, contours=False, levels=[0.0], contour_kwargs={"linewidths":1.0},hist_kwargs={"linewidth":1.0, "density": True},labels=labels)
     # Save this figure
-    fig.savefig(f'plots/exploration_corner.png')
+    fig.savefig(f'plots/Exploration_corner_plot.png')
 
 
 def evaluate_run(run_diagnostics):
