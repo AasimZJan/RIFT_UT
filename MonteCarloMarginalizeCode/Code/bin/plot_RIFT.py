@@ -34,9 +34,8 @@ __author__ = "A. Jan"
 np.set_printoptions(legacy='1.25')
 
 # Default colors
-#default_colors=['black', "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
-#          "#17becf", "#e377c2", "#7f7f7f", "#1b9e77", "#bcbd22"]
 default_colors=['black', "#FF0000", "#FF7F00", "#FFFF00", "#7FFF00", "#00FF00", "#00FFFF", "#007FFF", "#0000FF", "#4B0082", "#8B00FF"]
+
 ###########################################################################################
 # Path and Configuration Setup
 ###########################################################################################
@@ -420,9 +419,9 @@ def plot_neff_data(path_to_main_folder):
         try:
             with open(filename, "r") as f:
                 content = f.read()
-                match = re.search(r"--n-eff\s+([+-]?\d+(\.\d+)?)", content)
-                if match:
-                    neff_value = float(match.group(1))
+                matches = re.findall(r"--n-eff\s+([+-]?\d+(?:\.\d+)?)", content)
+                if matches:
+                    neff_value = float(matches[-1])
                     ax.axhline(
                         y=neff_value,
                         linestyle="--",
