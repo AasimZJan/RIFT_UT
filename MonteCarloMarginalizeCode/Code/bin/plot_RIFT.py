@@ -34,10 +34,9 @@ __author__ = "A. Jan"
 np.set_printoptions(legacy='1.25')
 
 # Default colors
-#default_colors=['black', '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2',
-# '#7f7f7f', '#bcbd22', '#17becf']
-default_colors=['black', "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
-          "#17becf", "#e377c2", "#7f7f7f", "#1b9e77", "#bcbd22"]
+#default_colors=['black', "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
+#          "#17becf", "#e377c2", "#7f7f7f", "#1b9e77", "#bcbd22"]
+default_colors=['black', "#FF0000", "#FF7F00", "#FFFF00", "#7FFF00", "#00FF00", "#00FFFF", "#007FFF", "#0000FF", "#4B0082", "#8B00FF"]
 ###########################################################################################
 # Path and Configuration Setup
 ###########################################################################################
