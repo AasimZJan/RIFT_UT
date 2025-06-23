@@ -14,6 +14,8 @@ import sys
 import RIFT.lalsimutils as lsu
 from argparse import ArgumentParser
 import corner
+import re
+
 # Matplotlib configuration
 plt.rcParams.update({
     'axes.labelsize': 16,
@@ -28,9 +30,14 @@ plt.style.use('seaborn-v0_8-poster')
 
 __author__ = "A. Jan"
 
-# avoid printing float type
+# Avoid printing float type
 np.set_printoptions(legacy='1.25')
 
+# Default colors
+#default_colors=['black', '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2',
+# '#7f7f7f', '#bcbd22', '#17becf']
+default_colors=['black', "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
+          "#17becf", "#e377c2", "#7f7f7f", "#1b9e77", "#bcbd22"]
 ###########################################################################################
 # Path and Configuration Setup
 ###########################################################################################
@@ -45,11 +52,16 @@ LISA = opts.LISA
 eccentricity = opts.eccentric
 precessing = opts.precessing
 
+# Print kind of analysis
+messages = []
 if eccentricity:
-    print("Eccentricity set to True")
+    messages.append("Eccentric analysis")
 if precessing:
-    print("Precessing set to True")
-
+    messages.append("Precessing analysis")
+if LISA:
+    messages.append("LISA analysis")
+if messages:
+    print("\n" + "\n".join(messages) + "\n")
 
 # Locate corner plot executable
 corner_plot_exe = os.popen("which plot_posterior_corner.py").read()[:-1]
@@ -174,13 +186,13 @@ def create_plots_folder(base_dir_path):
         base_dir_path (str): Path to the base directory where the 'plots' folder will be created.
     """
     if not(os.path.exists(base_dir_path + "/plots")):
-        print(f"plots folder does not exist. Creating one in {base_dir_path}")
+        print(f"--> plots folder does not exist. Creating one in {base_dir_path}")
         os.mkdir(base_dir_path + "/plots")
         os.mkdir(base_dir_path + "/plots/histograms")
         os.mkdir(base_dir_path + "/plots/corner_plots")
         os.mkdir(base_dir_path + "/plots/1_D_plots")
     else:
-        print(f"plots folder exists, saving plots in directory {base_dir_path}/plots")
+        print(f"--> plots folder exists, saving plots in directory {base_dir_path}/plots")
 
 def get_chirpmass_massratio_eta_totalmass_from_componentmasses(m1, m2):
     """
@@ -355,7 +367,7 @@ def plot_high_likelihood_expoloration(path_to_main_folder):
     Args:
         path_to_main_folder (str): Path to the main folder containing the composite files.
     """
-    print("\nPlotting likelihood exploration.")
+    print("\n--> Plotting likelihood exploration.")
     run_diagnostics["composite_information"] = {}
     fig, ax = plt.subplots()
     ax.set_xlabel("iteration")
@@ -393,7 +405,7 @@ def plot_neff_data(path_to_main_folder):
     Args:
         path_to_main_folder (str): Path to the main folder containing CIP iteration subfolders.
     """
-    print("\nPlotting n-eff for CIP.")
+    print("\n--> Plotting n-eff for CIP.")
     # find CIP folders
     cip_iteration_folders= glob.glob(path_to_main_folder + "/iteration*cip*")
     
@@ -401,21 +413,32 @@ def plot_neff_data(path_to_main_folder):
     ax.set_xlabel("iteration")
     ax.set_ylabel("neff")
     iterations=np.arange(len(cip_iteration_folders)-1) # last folders don't usually have anything
+    
     # read requested neff from CIP sub files
-    try:
-        run_diagnostics["CIP_neff"] = {}
-        neff_requested_0 = os.popen('cat CIP_worker0.sub 2> /dev/null | grep -Eo "\-\-n-eff [+-]?[0-9]+([.][0-9]+)?"').read()[:-1].split(" ")[-1]
-        ax.axhline(y = float(neff_requested_0), linestyle = "--", color = "black", alpha = 0.8, linewidth = 1.0, label = "worker 0 neff")
-        run_diagnostics["CIP_neff"]["CIP_worker0"] = np.round(float(neff_requested_0), 2)
-        neff_requested_1 = os.popen('cat CIP_worker1.sub 2> /dev/null | grep -Eo "\-\-n-eff [+-]?[0-9]+([.][0-9]+)?"').read()[:-1].split(" ")[-1]
-        ax.axhline(y = float(neff_requested_1), linestyle = "--", color = "blue", alpha = 0.8, linewidth = 1.0, label = "worker 1 neff")
-        run_diagnostics["CIP_neff"]["CIP_worker1"] = np.round(float(neff_requested_1), 2)
-        neff_requested_2 = os.popen('cat CIP_worker2.sub 2> /dev/null | grep -Eo "\-\-n-eff [+-]?[0-9]+([.][0-9]+)?"').read()[:-1].split(" ")[-1] # could find a better way to do this
-        ax.axhline(y = float(neff_requested_2), linestyle = "--", color = "red", alpha = 0.8, linewidth = 1.0, label = "worker 2 neff")
-        run_diagnostics["CIP_neff"]["CIP_worker2"] = np.round(float(neff_requested_2), 2)
-    except Exception as e:
-        pass
+    run_diagnostics["CIP_neff"] = {}
+    for i in range(3):
+        filename = f"{path}/CIP_worker{i}.sub"
+        try:
+            with open(filename, "r") as f:
+                content = f.read()
+                match = re.search(r"--n-eff\s+([+-]?\d+(\.\d+)?)", content)
+                if match:
+                    neff_value = float(match.group(1))
+                    ax.axhline(
+                        y=neff_value,
+                        linestyle="--",
+                        color=default_colors[i],
+                        alpha=1.0,
+                        linewidth=1.0,
+                        label=f"worker {i} neff"
+                    )
+                    run_diagnostics["CIP_neff"][f"CIP_worker{i}"] = np.round(neff_value, 2)
+                else:
+                    continue
+        except Exception as e:
+            pass
     ax.legend(loc="upper left")
+    
     # read neff achived for each iteration from each instance of CIP
     run_diagnostics["CIP_neff_achieved"] = {}
     for n in iterations:
@@ -476,7 +499,7 @@ def plot_cip_max_lnL(path_to_main_folder):
 
     The function saves the plot as 'Sampled_CIP_lnL.png' in a 'plots' subdirectory of the main folder.
     """
-    print("\nPlotting sampled lnL by CIP")
+    print("\n--> Plotting sampled lnL by CIP")
     iterations = np.arange(0, run_diagnostics["latest_iteration"]+1, 1)
     run_diagnostics['cip_sampled_lnL'] = {}
     fig, ax = plt.subplots()
@@ -519,7 +542,7 @@ def plot_histograms(sorted_posterior_file_paths, plot_title, iterations = None, 
         plot_legend (bool): Whether to include a legend in the histograms. Defaults to True.
         JSD (bool): Whether to calculate and display Jensen-Shannon Divergence between iterations. Defaults to True.
     """
-    print("\nPlotting histograms")
+    print("\n--> Plotting histograms")
     # when you just want to plot final iterations histograms
     if iterations is None: 
         iterations = [-1]
@@ -559,7 +582,7 @@ def plot_histograms(sorted_posterior_file_paths, plot_title, iterations = None, 
             if i > 0 and JSD:
                 JS_test = calculate_JS_divergence(data, data_previous)
                 line_label +=f" ({calculate_JS_divergence(data, data_previous).median:0.3f})"
-            ax.hist(data, label = line_label, histtype="step", bins = 50, density=True, linewidth=1.0)
+            ax.hist(data, label = line_label, histtype="step", bins = 50, density=True, linewidth=1.0, color=default_colors[i])
             if use_truths:
                 factor = 1
                 parameter_extract = parameter
@@ -596,7 +619,7 @@ def plot_corner(sorted_posterior_file_paths, plot_title, iterations = None, para
         parameters (list of str): List of parameters to include in the plot. Defaults to ["mc", "eta", "xi"].
         use_truths (bool): Whether to include truth values in the plot. Defaults to False.
     """
-    print(f"\nPlotting corner plot for params ({plot_title}) {parameters}")
+    print(f"\n--> Plotting corner plot for params ({plot_title}) {parameters}")
     max_lnL, no_points = run_diagnostics["max_lnL"], run_diagnostics["high_lnL_points"]  
     title = f"max_lnL={max_lnL:0.2f},points_cut={no_points}" 
     plotting_command = f"python {corner_plot_exe} --plot-1d-extra --quantiles None --ci-list [0.9] --use-title {title} "
@@ -627,7 +650,7 @@ def plot_corner(sorted_posterior_file_paths, plot_title, iterations = None, para
 
     # Add posterior file paths and labels to the command
     for i, posterior_file in enumerate(sorted_posterior_file_paths):
-        plotting_command += f"--posterior-file {posterior_file} --posterior-label {iterations[i]} "
+        plotting_command += f"--posterior-file {posterior_file} --posterior-label {iterations[i]} --posterior-color '{default_colors[i]}' "
 
     # Append LISA flag if applicable
     if LISA:
@@ -677,7 +700,7 @@ def plot_JS_divergence(posterior_1_path, posterior_2_path, posterior_3_path=None
         parameters.append("s1y")
         parameters.append("s2x")
         parameters.append("s2y")
-    print(f"\nPlotting Jensen Shannon Divergence for {parameters} with threshold {threshold}\n")
+    print(f"\n--> Plotting Jensen Shannon Divergence for {parameters} with threshold {threshold}\n")
     posterior_data1 = np.loadtxt(posterior_1_path)
     posterior_data2 = np.loadtxt(posterior_2_path)
     if not(posterior_3_path is None):
@@ -742,7 +765,7 @@ def write_sample_statistics(posterior, parameters=["mc","eta", "m1", "m2", "s1z"
         parameters.append("s2y")
     if use_truths:
         P = lsu.xml_to_ChooseWaveformParams_array(truth_file_path)[0]
-    print(f"\nWriting sample statistics for parameters: {parameters}")
+    print(f"\n--> Writing sample statistics for parameters: {parameters}")
     posterior = np.loadtxt(posterior)
     f = open(path+f"/plots/sample_statistics.txt", "w")
     f.write("Note: limits are 68th percentile (1 std)\n")
@@ -779,7 +802,7 @@ def plot_exploration_corner(all_net_path):
     Args:
         all_net_path (str): File path to all.net
     """
-    print('\nPlotting exploration corner')
+    print('\n--> Plotting exploration corner')
     use_cols = [1,2,5,8]
     if use_truths:
         P = lsu.xml_to_ChooseWaveformParams_array(truth_file_path)[0]
@@ -799,6 +822,16 @@ def plot_exploration_corner(all_net_path):
         labels=[r"$m_1$", r"$m_2$", r"$a_{1z}$", r"$a_{2z}$",  r'$e_{gw}$', '$l_{gw}$']
         if use_truths:
             truths.append([P.extract_param('eccentricity'), P.extract_param('meanPerAno')])
+        if precessing:
+            use_cols.append([3,4,6,7])
+            labels=[r"$m_1$", r"$m_2$", r"$a_{1z}$", r"$a_{2z}$", r'$e_{gw}$', '$l_{gw}$', r"$a_{2z}$", r"$a_{1x}$", r"$a_{1y}$", r"$a_{2x}$", r"$a_{2y}$"]
+            if use_truths:
+                truths.append([P.extract_param('s1x'), P.extract_param('s1y'), P.extract_param('s2x'), P.extract_param('s2y')])
+    if not(LISA) and precessing and not(eccentricity):
+        use_cols.append([3,4,6,7])
+        labels=[r"$m_1$", r"$m_2$", r"$a_{1z}$", r"$a_{2z}$", r"$a_{2z}$", r"$a_{1x}$", r"$a_{1y}$", r"$a_{2x}$", r"$a_{2y}$"]
+        if use_truths:
+            truths.append([P.extract_param('s1x'), P.extract_param('s1y'), P.extract_param('s2x'), P.extract_param('s2y')])
     # Load all.net
     def flatten(arg):
         if not isinstance(arg, list): # if not list
