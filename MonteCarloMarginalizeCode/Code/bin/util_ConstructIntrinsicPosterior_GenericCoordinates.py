@@ -1483,16 +1483,26 @@ def fit_rf_pca(x,y,y_errors=None,fname_export='nn_fit'):
 
 def fit_nearest_neighbor(x, y, y_errors=None, fname_export=None):
     from scipy.spatial import cKDTree
-    tree = cKDTree(x)
-    def fn_return(x_in, y=y, tree=tree):
+    from sklearn.preprocessing import MinMaxScaler
+    
+    # Fit the scaler to input points and transform them
+    scaler = MinMaxScaler()
+    x_scaled = scaler.fit_transform(x)
+    tree = cKDTree(x_scaled)
+
+    def fn_return(x_in, y=y, tree=tree, scaler=scaler):
         # copying this from fit_rf
         f_out = -100000*np.ones(len(x_in))
+        
         # remove infinity or Nan
         indx_ok = np.all(np.isfinite(x_in),axis=-1)
         indx_ok_size = np.all( np.logical_not(np.greater(np.abs(x_in),1e37)), axis=-1)
         indx_ok = np.logical_and(indx_ok, indx_ok_size)
         
-        _, indices = tree.query(x_in[indx_ok])
+        # Scale the valid input points
+        x_in_scaled = scaler.transform(x_in[indx_ok])
+        _, indices = tree.query(x_in_scaled[indx_ok])
+        
         f_out[indx_ok] = y[indices]
         return f_out
     print( " Demonstrating nearest_neighbor")   # debugging
