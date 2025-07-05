@@ -1481,6 +1481,25 @@ def fit_rf_pca(x,y,y_errors=None,fname_export='nn_fit'):
     print( "    std ", np.std(residuals), np.max(y), np.max(fn_return(x)))
     return fn_return
 
+def fit_nearest_neighbor(x, y, y_errors=None, fname_export=None):
+    from scipy.spatial import cKDTree
+    tree = cKDTree(x)
+    def fn_return(x_in, y=y, tree=tree):
+        # copying this from fit_rf
+        f_out = -100000*np.ones(len(x_in))
+        # remove infinity or Nan
+        indx_ok = np.all(np.isfinite(x_in),axis=-1)
+        indx_ok_size = np.all( np.logical_not(np.greater(np.abs(x_in),1e37)), axis=-1)
+        indx_ok = np.logical_and(indx_ok, indx_ok_size)
+        
+        _, indices = tree.query(x_in[indx_ok])
+        f_out[indx_ok] = y[indices]
+        return f_out
+    print( " Demonstrating nearest_neighbor")   # debugging
+    residuals = fn_return(x) - y
+    print( "    std ", np.std(residuals), np.max(y), np.max(fn_return(x)))
+    return fn_return
+
 def fit_nn_rfwrapper(x,y,y_errors=None,fname_export='nn_fit'):
     from sklearn.ensemble import RandomForestRegressor
     # Instantiate model. Usually not that many structures to find, don't overcomplicate
@@ -2236,6 +2255,22 @@ elif opts.fit_method == 'weighted_nearest':
         Y_err=Y_err[indx]
         dat_out_low_level_coord_names = dat_out_low_level_coord_names[indx]
     my_fit = fit_nearest(X,Y,y_errors=Y_err)
+elif opts.fit_method == 'nearest_neighbor':
+    print( " FIT METHOD ", opts.fit_method, " IS nearest_neighbor ")
+    # NO data truncation for NN needed?  To be *consistent*, have the code function the same way as the others
+    X=X[indx_ok]
+    Y=Y[indx_ok] - lnL_shift
+    Y_err = Y_err[indx_ok]
+    dat_out_low_level_coord_names =     dat_out_low_level_coord_names[indx_ok]
+    # Cap the total number of points retained, AFTER the threshold cut
+    if opts.cap_points< len(Y) and opts.cap_points> 100:
+        n_keep = opts.cap_points
+        indx = np.random.choice(np.arange(len(Y)),size=n_keep,replace=False)
+        Y=Y[indx]
+        X=X[indx]
+        Y_err=Y_err[indx]
+        dat_out_low_level_coord_names = dat_out_low_level_coord_names[indx]
+    my_fit = fit_nearest_neighbor(X,Y,y_errors=Y_err)
 else:
     print(" NO KNOWN FIT METHOD ")
     sys.exit(55)
