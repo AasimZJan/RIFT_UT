@@ -359,6 +359,7 @@ parser.add_argument("--assume-eos-but-primary-bh",action='store_true',help="Spec
 parser.add_argument("--use-eccentricity", action="store_true")
 parser.add_argument("--use-meanPerAno", action="store_true")
 parser.add_argument("--tripwire-fraction",default=0.05,type=float,help="Fraction of nmax of iterations after which n_eff needs to be greater than 1+epsilon for a small number epsilon")
+parser.add_argument("--eccentricity-prior", default='uniform', help='eccentricity prior = [uniform, log10]')
 
 # FIXME hacky options added by me (Liz) to try to get my capstone project to work.
 # I needed a way to fix the component masses and nothing else seemed to work.
@@ -862,6 +863,11 @@ def eccentricity_prior(x):
 def eccentricity_squared_prior(x):  # note this is INCONSISTENT with the prior above -- we are designed to give a CDF = (e/emax)^2 for example here
     return np.ones(x.shape) / (ECC_MAX-ECC_MIN)**2 # uniform over the interval [0.0, ECC_MAX]
 
+def log10_eccentricity_prior(x):
+    # int log10(x) = x * (log10(x) - log10(e))
+    normalization_log10_e = ECC_MAX * (np.log10(ECC_MAX) - np.log10(np.exp(1))) - ECC_MIN * (np.log10(ECC_MIN) - np.log10(np.exp(1)))
+    return np.log10(x) / normalization_log10_e
+
 def meanPerAno_prior(x):
     return np.ones(x.shape) / (MEANPERANO_MAX-MEANPERANO_MIN) # uniform over the interval [MEANPERANO_MIN, MEANPERANO_MAX]
 
@@ -1001,6 +1007,9 @@ elif  opts.aligned_prior == 'alignedspin-zprior-positive':
     prior_range_map['s1z_bar'] = [0,chi_max]
     prior_range_map['s2z_bar'] = [0,chi_small_max]
 
+if opts.eccentricity_prior == 'log10':
+    print('WARNING: this prior only works with eccentricity and not eccentricity_squared')
+    prior_map["eccentricity"] = log10_eccentricity_prior
 if opts.transverse_prior == 'uniform':
     # Don't do anything: let the default uniform priros for s1x, s1y ... OR chi1_perp-bar, etc used be used
     # Note these have different physical meaning!
