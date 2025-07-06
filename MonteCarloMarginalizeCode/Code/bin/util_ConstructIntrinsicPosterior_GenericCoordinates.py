@@ -1444,6 +1444,34 @@ def fit_rf(x,y,y_errors=None,fname_export='nn_fit',verbose=False):
     print( "    std ", np.std(residuals), np.max(y), np.max(fn_return(x)))
     return fn_return
 
+def fit_xg(x,y,y_errors=None,fname_export='nn_fit',verbose=False):
+    import xgboost as xgb
+    # Instantiate model. Usually not that many structures to find, don't overcomplicate
+    #   - should scale like number of samples
+    rf = xgb.XGBRegressor(n_estimators=100) # no more than 5% of samples in a leaf
+    if y_errors is None:
+        rf.fit(x,y)
+    else:
+        rf.fit(x,y,sample_weight=1./y_errors**2)
+
+    ### reject points with infinities : problems for inputs
+    def fn_return(x_in,rf=rf):
+        f_out = -lnL_default_large_negative*np.ones(len(x_in))
+        # remove infinity or Nan
+        indx_ok = np.all(np.isfinite(x_in),axis=-1)
+        # rf internally uses float32, so we need to remove points > 10^37 or so !
+        #    ... this *should* never happen due to bounds constraints, but ...
+        indx_ok_size = np.all( np.logical_not(np.greater(np.abs(x_in),1e37)), axis=-1)
+        indx_ok = np.logical_and(indx_ok, indx_ok_size)
+        f_out[indx_ok] = rf.predict(x_in[indx_ok])
+        return f_out
+#    fn_return = lambda x_in: rf.predict(x_in)
+
+    print( " Demonstrating RF")   # debugging
+    residuals = rf.predict(x)-y
+    print( "    std ", np.std(residuals), np.max(y), np.max(fn_return(x)))
+    return fn_return
+
 def fit_rf_pca(x,y,y_errors=None,fname_export='nn_fit'):
 #    from sklearn.ensemble import RandomForestRegressor
     from sklearn.ensemble import ExtraTreesRegressor
@@ -1501,11 +1529,38 @@ def fit_nearest_neighbor(x, y, y_errors=None, fname_export=None):
         
         # Scale the valid input points
         x_in_scaled = scaler.transform(x_in[indx_ok])
-        _, indices = tree.query(x_in_scaled[indx_ok])
+        _, indices = tree.query(x_in_scaled)
         
         f_out[indx_ok] = y[indices]
         return f_out
     print( " Demonstrating nearest_neighbor")   # debugging
+    residuals = fn_return(x) - y
+    print( "    std ", np.std(residuals), np.max(y), np.max(fn_return(x)))
+    return fn_return
+
+def fit_knn(x, y,  y_errors=None, fname_export=None):
+    from sklearn.preprocessing import MinMaxScaler
+    from sklearn.neighbors import KNeighborsRegressor
+    knn = KNeighborsRegressor(n_neighbors=10, weights='distance')
+    
+    scaler = MinMaxScaler()
+    x_scaled = scaler.fit_transform(x)
+
+    knn.fit(x_scaled, y)
+    def fn_return(x_in, y=y, knn=knn):
+        # copying this from fit_rf
+        f_out = -100000*np.ones(len(x_in))
+
+        # remove infinity or Nan
+        indx_ok = np.all(np.isfinite(x_in),axis=-1)
+        indx_ok_size = np.all( np.logical_not(np.greater(np.abs(x_in),1e37)), axis=-1)
+        indx_ok = np.logical_and(indx_ok, indx_ok_size)
+        
+        x_in_scaled = scaler.transform(x_in[indx_ok])
+
+        f_out[indx_ok] = knn.predict(x_in_scaled)
+        return f_out
+    print( " Demonstrating knn")   # debugging
     residuals = fn_return(x) - y
     print( "    std ", np.std(residuals), np.max(y), np.max(fn_return(x)))
     return fn_return
@@ -2181,6 +2236,22 @@ elif opts.fit_method == 'rf':
         Y_err=Y_err[indx]
         dat_out_low_level_coord_names = dat_out_low_level_coord_names[indx]
     my_fit = fit_rf(X,Y,y_errors=Y_err)
+elif opts.fit_method == 'xg':
+    print( " FIT METHOD ", opts.fit_method, " IS xg ")
+    # NO data truncation for NN needed?  To be *consistent*, have the code function the same way as the others
+    X=X[indx_ok]
+    Y=Y[indx_ok] - lnL_shift
+    Y_err = Y_err[indx_ok]
+    dat_out_low_level_coord_names =     dat_out_low_level_coord_names[indx_ok]
+    # Cap the total number of points retained, AFTER the threshold cut
+    if opts.cap_points< len(Y) and opts.cap_points> 100:
+        n_keep = opts.cap_points
+        indx = np.random.choice(np.arange(len(Y)),size=n_keep,replace=False)
+        Y=Y[indx]
+        X=X[indx]
+        Y_err=Y_err[indx]
+        dat_out_low_level_coord_names = dat_out_low_level_coord_names[indx]
+    my_fit = fit_xg(X,Y,y_errors=Y_err)
 elif opts.fit_method == 'rf_pca':
     print( " FIT METHOD ", opts.fit_method, " IS RF PCA")
     # NO data truncation for NN needed?  To be *consistent*, have the code function the same way as the others
@@ -2281,6 +2352,22 @@ elif opts.fit_method == 'nearest_neighbor':
         Y_err=Y_err[indx]
         dat_out_low_level_coord_names = dat_out_low_level_coord_names[indx]
     my_fit = fit_nearest_neighbor(X,Y,y_errors=Y_err)
+elif opts.fit_method == 'knn':
+    print( " FIT METHOD ", opts.fit_method, " IS knn ")
+    # NO data truncation for NN needed?  To be *consistent*, have the code function the same way as the others
+    X=X[indx_ok]
+    Y=Y[indx_ok] - lnL_shift
+    Y_err = Y_err[indx_ok]
+    dat_out_low_level_coord_names =     dat_out_low_level_coord_names[indx_ok]
+    # Cap the total number of points retained, AFTER the threshold cut
+    if opts.cap_points< len(Y) and opts.cap_points> 100:
+        n_keep = opts.cap_points
+        indx = np.random.choice(np.arange(len(Y)),size=n_keep,replace=False)
+        Y=Y[indx]
+        X=X[indx]
+        Y_err=Y_err[indx]
+        dat_out_low_level_coord_names = dat_out_low_level_coord_names[indx]
+    my_fit = fit_knn(X,Y,y_errors=Y_err)
 else:
     print(" NO KNOWN FIT METHOD ")
     sys.exit(55)
