@@ -30,7 +30,7 @@ plt.style.use('seaborn-v0_8-poster')
 __author__ = "A. Jan"
 
 # Avoid printing float type
-np.set_printoptions(legacy='1.25')
+np.set_printoptions(legacy=1.25)
 
 # Default colors
 default_colors=['black', "#FF0000", "#FF7F00", "#FFFF00", "#7FFF00", "#00FF00", "#00FFFF", "#007FFF", "#0000FF", "#4B0082", "#8B00FF"]
