@@ -499,6 +499,7 @@ def plot_cip_max_lnL(path_to_main_folder):
     iterations = np.arange(0, run_diagnostics["latest_iteration"]+1, 1)
     run_diagnostics['cip_sampled_lnL'] = {}
     fig, ax = plt.subplots()
+    fig_hist, ax_hist = plt.subplots()
     for iteration in iterations:
         run_diagnostics['cip_sampled_lnL'][iteration] = {}
         try:
@@ -506,9 +507,12 @@ def plot_cip_max_lnL(path_to_main_folder):
         except:
             continue
         collect_lnL = []
+        collec_lnL_hist = np.zeros((1,1))
         for j in np.arange(len(files_iteration)):
             data = np.loadtxt(files_iteration[j])
             collect_lnL.append(np.max(data))
+            collec_lnL_hist = np.vstack([collec_lnL_hist, data[:, None]])
+        collec_lnL_hist = np.delete(collec_lnL_hist, 0, 0)
         collect_lnL = np.array(collect_lnL)
         low_1_std, max_lnL_avg_this_iteration, high_1_std  = np.percentile(collect_lnL, [16,50,84])
         low_2_std, max_lnL_avg_this_iteration, high_2_std  = np.percentile(collect_lnL, [2.5,50,97.5])
@@ -519,12 +523,18 @@ def plot_cip_max_lnL(path_to_main_folder):
         
         ax.errorbar(iteration, max_lnL_avg_this_iteration, yerr = np.array([max_lnL_avg_this_iteration-low_2_std, high_2_std-max_lnL_avg_this_iteration]).reshape(-1,1), color = "royalblue", ecolor = "red", fmt ='.')
         ax.errorbar(iteration, max_lnL_avg_this_iteration, yerr = np.array([max_lnL_avg_this_iteration-low_1_std, high_1_std-max_lnL_avg_this_iteration]).reshape(-1,1), color = "royalblue", ecolor = "green", fmt ='o')
+        ax_hist.hist(collec_lnL_hist, label=iteration, histtype='step', linewidth = 1.0, bins=30)
     ax.set_xlabel('iteration')
     ax.set_ylabel('lnL')
     ax.axhline(y = run_diagnostics['max_lnL'], linestyle = "--", color="black")
     ax.fill_between(iterations, run_diagnostics['max_lnL']-2, run_diagnostics['max_lnL'], color="green", alpha=0.5)
     ax.set_xticks(iterations)
     fig.savefig(path+f"/plots/Maximum_sampled_lnL_CIP.png", bbox_inches="tight")
+
+    ax_hist.set_xlabel('lnL')
+    ax_hist.legend(loc='upper left', frameon=False)
+    ax_hist.axvline(x = run_diagnostics['max_lnL'], linestyle = "--", color="black")
+    fig_hist.savefig(path+f"/plots/CIP_lnL_distribution_per_iteration", bbox_inches="tight")
     plt.close()
 
 def plot_histograms(sorted_posterior_file_paths, plot_title, iterations = None, plot_legend = True, JSD = True):
@@ -976,8 +986,9 @@ except Exception as e:
 # plot sampled max lnL
 try:
     plot_cip_max_lnL(path)
-except:
-     print("Couldn't plot max lnL sampled by CIP per iteration.")
+except Exception as e:
+    print(e)
+    print("Couldn't plot max lnL sampled by CIP per iteration.")
 
 # plot likelihood exploration
 try:
