@@ -864,9 +864,7 @@ def eccentricity_squared_prior(x):  # note this is INCONSISTENT with the prior a
     return np.ones(x.shape) / (ECC_MAX-ECC_MIN)**2 # uniform over the interval [0.0, ECC_MAX]
 
 def log10_eccentricity_prior(x):
-    # int log10(x) = x * (log10(x) - log10(e))
-    normalization_log10_e = ECC_MAX * (np.log10(ECC_MAX) - np.log10(np.exp(1))) - ECC_MIN * (np.log10(ECC_MIN) - np.log10(np.exp(1)))
-    return np.log10(x) / normalization_log10_e
+    return 1/(x*np.log(ECC_MAX/ECC_MIN))
 
 def meanPerAno_prior(x):
     return np.ones(x.shape) / (MEANPERANO_MAX-MEANPERANO_MIN) # uniform over the interval [MEANPERANO_MIN, MEANPERANO_MAX]
