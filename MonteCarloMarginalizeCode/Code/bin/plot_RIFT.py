@@ -30,7 +30,12 @@ plt.style.use('seaborn-v0_8-poster')
 __author__ = "A. Jan"
 
 # Avoid printing float type
-np.set_printoptions(legacy=1.25)
+if hasattr(np, 'set_printoptions'):
+    try:
+        np.set_printoptions(legacy='1.25')
+    except TypeError:
+        # Fallback for older versions or invalid legacy
+        np.set_printoptions()
 
 # Default colors
 default_colors=['black', "#FF0000", "#FF7F00", "#FFFF00", "#7FFF00", "#00FF00", "#00FFFF", "#007FFF", "#0000FF", "#4B0082", "#8B00FF"]
@@ -877,6 +882,7 @@ def evaluate_run(run_diagnostics):
     f.write(f"Total number of high marginalized lnL points not used due to large error = {run_diagnostics['high_lnL_points_with_large_error']}\n")
     f.write(f"Approximate SNR captured = {np.sqrt(2*run_diagnostics['max_lnL'])}\n")
     f.write(f"Number of high lnL points with lnL cut [12, 10, 5, 2] = [{run_diagnostics['high_lnL_points_with_lnLcut_12'], run_diagnostics['high_lnL_points_with_lnLcut_10'], run_diagnostics['high_lnL_points_with_lnLcut_5'], run_diagnostics['high_lnL_points_with_lnLcut_2']}]\n")
+    print(run_diagnostics['composite_information'])
     f.write(f"Likelihood exploration data per iteration: \n{run_diagnostics['composite_information']}\n")
     
     ILE_is_good = True
