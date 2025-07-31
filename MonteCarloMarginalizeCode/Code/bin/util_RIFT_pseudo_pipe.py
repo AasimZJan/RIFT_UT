@@ -302,6 +302,7 @@ parser.add_argument("--archive-pesummary-label",default=None,help="If provided, 
 parser.add_argument("--archive-pesummary-event-label",default="this_event",help="Label to use on the pesummary page itself")
 parser.add_argument("--internal-mitigate-fd-J-frame",default="L_frame",help="L_frame|rotate, choose method to deal with ChooseFDWaveform being in wrong frame. Default is to request L frame for inputs")
 parser.add_argument("--internal-force-puff-iterations", default=4, type=int, help="Number of iterations to be puffed")
+parser.add_argument("--cartesian-spin-puffing", default=True, help='Default puffing is only on chieff_aligned for aligned spin runs, this allows puffing to be carried out in both spin co-ordinates')
 opts=  parser.parse_args()
 
 
@@ -1241,6 +1242,8 @@ puff_params = ' '.join(instructions_puff)
 if opts.internal_puff_transverse:
     puff_params = puff_params.replace('--parameter chieff_aligned', '--parameter s1z_bar --parameter s2z_bar ')
     puff_params +=  ' --parameter phi1 --parameter phi2 --parameter chi1_perp_u --parameter chi2_perp_u '
+if opts.cartesian_spin_puffing:
+    puff_params = puff_params.replace('--parameter chieff_aligned', '--parameter s1z --parameter s2z ')
 if opts.assume_matter:
 #    puff_params += " --parameter LambdaTilde "  # should already be present
     puff_max_it +=5   # make sure we resolve the correlations

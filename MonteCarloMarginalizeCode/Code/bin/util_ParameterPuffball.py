@@ -90,11 +90,11 @@ downselect_dict = {}
 # Don't add full spin constraint unless called for. If so, we need to retain transverse values!  That will be done AT END
 #downselect_dict['chi1'] = [0,1]
 #downselect_dict['chi2'] = [0,1]
-downselect_dict['eta'] = [0,0.25]
+#downselect_dict['eta'] = [0,0.25]
 if opts.eta_range:
     downselect_dict['eta'] = eval(opts.eta_range)
-downselect_dict['m1'] = [0,1e10]
-downselect_dict['m2'] = [0,1e10]
+#downselect_dict['m1'] = [0,1e10]
+#downselect_dict['m2'] = [0,1e10]
 if opts.mc_range:
     downselect_dict['mc'] = eval(opts.mc_range)
 if opts.mtot_range:
