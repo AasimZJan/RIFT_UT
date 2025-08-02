@@ -1446,7 +1446,7 @@ def fit_xg(x,y,y_errors=None,fname_export='nn_fit',verbose=False):
     import xgboost as xgb
     # Instantiate model. Usually not that many structures to find, don't overcomplicate
     #   - should scale like number of samples
-    rf = xgb.XGBRegressor(n_estimators=100) # no more than 5% of samples in a leaf
+    rf = xgb.XGBRegressor(n_estimators=100, objective='reg:absoluteerror') # reg:squarederror unstable for undersampled regions
     if y_errors is None:
         rf.fit(x,y)
     else:
