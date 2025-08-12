@@ -71,8 +71,11 @@ except:
     mcsampler_AV_ok = False
 mcsampler_Portfolio_ok=False
 try:
-    import RIFT.integrators.mcsamplerPortfolio as mcsamplerPortfolio
-    mcsampler_Portfolio_ok = True
+    if not('RIFT_LOWLATENCY' in os.environ):
+      import RIFT.integrators.mcsamplerPortfolio as mcsamplerPortfolio
+      mcsampler_Portfolio_ok = True
+    else:
+      mcsampler_Portfolio_ok = False
 except:
     print(" No mcsamplerPortolfio ")
 
@@ -245,6 +248,7 @@ optp.add_option("--internal-waveform-fd-L-frame",action='store_true',help='If tr
 optp.add_option("--internal-waveform-fd-no-condition",action='store_true',help='If true, adds extra_waveform_kwargs = {no_condition=True} to lalsimutils hlmoft. Impacts outputs of ChooseFDWaveform calls only. Provided to enable controlled tests of conditioning impact on PE')
 optp.add_option("--internal-waveform-extra-lalsuite-args",type=str,default=None)
 optp.add_option("--internal-waveform-extra-kwargs",type=str,default=None)
+optp.add_option("--internal-precompute-ignore-threshold",default=None,type=float)
 optp.add_option("--verbose",action='store_true')
 optp.add_option("--save-eccentricity", action="store_true")
 optp.add_option("--save-meanPerAno", action="store_true")
@@ -552,10 +556,10 @@ if opts.sim_xml:
         P.psi=0.0
         P.incl = 0.0       # only works for aligned spins. Be careful.
         P.fref = opts.reference_freq
-        if opts.approximant != "TaylorT4": # not default setting
-            P.approx = lalsimutils.lalsim.GetApproximantFromString(opts.approximant)  # allow user to override the approx setting. Important for NR followup, where no approx set in sim_xml!
-        if opts.approximant == "EccentricTD":
-            P.phaseO = 3
+        #if opts.approximant != "TaylorT4": # not default setting
+        #    P.approx = lalsimutils.lalsim.GetApproximantFromString(opts.approximant)  # allow user to override the approx setting. Important for NR followup, where no approx set in sim_xml!
+        #if opts.approximant == "EccentricTD":
+        #    P.phaseO = 3
 
     P = P_list[0]  # Load in the physical parameters of the injection.  
 else:
@@ -786,6 +790,8 @@ elif opts.sampler_method == 'AV':
       sampler.xpy= numpy
       sampler.identity_convert= lambda x: x
 elif opts.sampler_method == "portfolio":
+    if not(mcsampler_Portfolio_ok):
+      raise Exception(" Portfolio integrator requested but not available")
     use_portfolio=True
     opts.internal_use_lnL=True  # required, we only implement those scenarios right now
     sampler_list = []
@@ -805,13 +811,15 @@ elif opts.sampler_method == "portfolio":
     for name in sampler_types:
         if name =='AV':
             sampler = mcsamplerAdaptiveVolume.MCSampler(n_chunk=opts.n_chunk) # enforce now, so provided for setup phase
-        if name =='GMM':
+        elif name =='GMM':
             sampler = mcsamplerEnsemble.MCSampler()
             # following override means sampler_method is CHANGED, so THIS MUST BE LAST, and can't condition on portfolio
             opts.sampler_method = 'GMM'  # this will force the creation/parsing of GMM-specific arguments below, so they are properly passed
-        if name == "adaptive_cartesian_gpu":
+        elif name == "adaptive_cartesian_gpu" or name == 'AC':
             sampler = mcsamplerGPU.MCSampler()
             mcsampler  = mcsamplerGPU  # force use of routines in that file, for properly configured GPU-accelerated code as needed
+        elif name in mcsamplerPortfolio.known_pipelines:  # everything else, including nflow
+            sampler =  mcsamplerPortfolio.known_pipelines[name]()
         print('PORTFOLIO: adding {} '.format(name))
         # enable xpy for low level sampler as needed 
         if hasattr(sampler, 'xpy'):
@@ -824,10 +832,18 @@ elif opts.sampler_method == "portfolio":
     sampler.identity_convert= my_identity_convert
     sampler.identity_convert_togpu= my_identity_convert_togpu
     # sampler weights will be CPU-typed, so don't change them
-
+elif opts.sampler_method in mcsamplerPortfolio.known_pipelines: # access from plugins
+  sampler = mcsamplerPortfolio.known_pipelines[opts.sampler_method]()
+  # prep xpy, etc
+  my_xpy = xpy_default
+  my_identity_convert=identity_convert
+  my_identity_convert_togpu=identity_convert_togpu
+  sampler.xpy = my_xpy
+  sampler.identity_convert= my_identity_convert
+  sampler.identity_convert_togpu= my_identity_convert_togpu
 else:
-    print(" ILE: original sampler")
-    print(" ILE: {}".format(opts.sampler_method))
+    print(" ILE: **original sampler** ")
+    print(" ILE requested: {}".format(opts.sampler_method), " compare to ", mcsamplerPortfolio.known_pipelines)
 
 #
 # Psi -- polarization angle
@@ -1368,9 +1384,14 @@ def analyze_event(P_list, indx_event, data_dict, psd_dict, fmax, opts,inv_spec_t
       extra_waveform_kwargs.update(extra_args_dict)
     # Precompute
     t_window = opts.internal_data_storage_window_half
+    ignore_threshold=None
+    if opts.internal_precompute_ignore_threshold:
+      ignore_threshold=opts.internal_precompute_ignore_threshold
+      print("IGNORE ACTIVE ", ignore_threshold)
     rholms_intp, cross_terms, cross_terms_V,  rholms,  guess_snr, rest=factored_likelihood.PrecomputeLikelihoodTerms(
             fiducial_epoch, t_window, P, data_dict, psd_dict, opts.l_max, fmax,
             False, inv_spec_trunc_Q, T_spec,
+            ignore_threshold=ignore_threshold,   # default is None, old default was 1e-4. Use to speed calculation and/or discard 'junky' modes, esp at lower SNR. Dangerous at high SNR
             NR_group=NR_template_group,NR_param=NR_template_param,
             use_gwsignal=opts.use_gwsignal,
             use_gwsignal_approx=opts.approximant,
