@@ -9,6 +9,7 @@ import RIFT.lalsimutils as lalsimutils
 import lalsimulation as lalsim
 import lalframe
 import lal
+import h5py
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--fname", default=None, help = "Base name for output frame file. Otherwise auto-generated ")
@@ -26,20 +27,21 @@ parser.add_argument("--incl",default=None,help="Set the inclination of L (at fre
 parser.add_argument("--mass1",default=10,type=float,help='Mass 1 (solar masses)')
 parser.add_argument("--mass2",default=1.4,type=float,help='Mass 2 (solar masses)')
 parser.add_argument("--l-max",default=None,type=float,help='Inclusion of modes in injection')
-parser.add_argument("--path-to-NRhdf5", help='Path to NRhdf5 file. This needs to be in the LVK format')
+parser.add_argument("--path-to-hdf5", help='Path to NRhdf5 file. This needs to be in the LVK format')
 parser.add_argument("--modes-list", default=None, help="List of specific modes you want to use. Set l-max to None if you want to use this option.")
 parser.add_argument("--verbose", action="store_true",default=False)
 opts=  parser.parse_args()
 
-def generate_polarizations_from_NRhdf5(P, opts.path_to_NRhdf5):
+def generate_polarizations_from_NRhdf5(P, path_to_hdf5):
 
-    print(f"Reading waveform from {opts.path_to_NRhdf5}")
+    print(f"Reading waveform from {path_to_hdf5}")
 
     # get mtotal based on user input. This is in kgs.
     mtotal= (P.m1 + P.m2) 
 
     # load in hdf5 file to get masses, mass ratio and fmin
     data_1 = h5py.File(path_to_hdf5,"r")
+    print(data_1.attrs.keys())
     m1 = data_1.attrs["mass1"] * mtotal
     m2 = data_1.attrs["mass2"] * mtotal
     fmin = data_1.attrs["f_lower_at_1MSUN"] * lal.MSUN_SI/mtotal
@@ -55,7 +57,7 @@ def generate_polarizations_from_NRhdf5(P, opts.path_to_NRhdf5):
         print(f"Generating waveform with fmin is {P.fmin} Hz.")
 
     # get spins, useful for precessing case
-    s1x, s1y, s1z, s2x, s2y, s2z = lalsim.SimInspiralNRWaveformGetSpinsFromHDF5File(fref, mtotal/lal.MSUN_SI, opts.path_to_hdf5)
+    s1x, s1y, s1z, s2x, s2y, s2z = lalsim.SimInspiralNRWaveformGetSpinsFromHDF5File(fref, mtotal/lal.MSUN_SI, path_to_hdf5)
 
     # extract modes, either using l-max or modes-list option
     params = lal.CreateDict()
@@ -98,10 +100,10 @@ def generate_polarizations_from_NRhdf5(P, opts.path_to_NRhdf5):
     return h_p, h_c
 
 
-def hoft(P, opts.path_to_NRhdf5):
+def hoft(P, path_to_hdf5):
 
     P_copy = P.manual_copy()
-    hp, hc = generate_polarizations_from_NRhdf5(P_copy, opts.path_to_NRhdf5) 
+    hp, hc = generate_polarizations_from_NRhdf5(P_copy, opts.path_to_hdf5) 
 
     # Apply detector response
     if Fp!=None and Fc!=None:
@@ -174,8 +176,8 @@ else:
     sim_inspiral_table = lsctables.SimInspiralTable.get_table(xmldoc)
     P.copy_sim_inspiral(sim_inspiral_table[int(event)])
     P.taper = lalsimutils.lsu_TAPER_START
-    if opts.approx:
-        P.approx = lalsim.GetApproximantFromString(str(opts.approx))
+    #if opts.approx:
+    #    P.approx = lalsim.GetApproximantFromString(str(opts.approx))
 
 P.taper = lalsimutils.lsu_TAPER_START  # force taper
 P.detector = opts.instrument
