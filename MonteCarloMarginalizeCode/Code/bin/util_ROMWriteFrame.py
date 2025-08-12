@@ -117,20 +117,34 @@ print("Writing signal with ", hoft.data.length*hoft.deltaT, " to file ", fname)
 lalsimutils.hoft_to_frame_data(fname,channel,hoft)
 
 # TEST: Confirm it works by reading the frame
+# TEST: Confirm it works by reading the frame
 if opts.verbose:
+    print(" -----  Plotting data ------ ")
     import os
     from matplotlib import pyplot as plt
-    plt.switch_backend('agg')  # fix backend
     # First must create corresponding cache file
-    os.system("echo "+ fname+ " | lalapps_path2cache   > test.cache")
+    os.system("echo "+ fname+ " | lal_path2cache   > test.cache")
     # Now I can read it
     # Beware that the results are OFFSET FROM ONE ANOTHER due to PADDING,
     #    but that the time associations are correct
     hoft2 = lalsimutils.frame_data_to_hoft("test.cache", channel)
     tvals2 = (float(hoft2.epoch) - float(P.tref)) +  np.arange(hoft2.data.length)*hoft2.deltaT
     tvals = (float(hoft.epoch) - float(P.tref)) +  np.arange(hoft.data.length)*hoft.deltaT
-    plt.plot(tvals2,hoft2.data.data,label='Fr')
-    plt.plot(tvals,hoft.data.data,label='orig')
-    plt.xlim(-1,0.1)  # should scale with mass
-    plt.legend(); 
-    plt.savefig("frdump_rom_"+opts.instrument+".png")
+
+    fig, ax = plt.subplots(2, 1)
+    index_non_zero = np.argwhere(hoft.data.data >0).flatten()[0]
+    ax[0].plot(tvals[index_non_zero:index_non_zero + 10000], hoft.data.data[index_non_zero:index_non_zero + 10000])
+
+    ax[1].plot(tvals2,hoft2.data.data,label='Fr')
+    ax[1].plot(tvals,hoft.data.data,label='orig')
+    ax[1].legend(); #plt.show()
+    fig.savefig("injected-data_"+opts.instrument +".png")
+
+    hf = lalsimutils.DataFourierREAL8(hoft2)
+    fvals = np.arange(hf.data.length) * hf.deltaF
+    fig2, ax2 =  plt.subplots()
+    ax2.set_xlim([P.fmin - 2, fvals[-1]])
+    ax2.set_xscale("log")
+    ax2.set_yscale("log")
+    ax2.plot(fvals, 2*fvals*np.abs(hf.data.data))
+    fig2.savefig("injected-data_"+opts.instrument +"_FD.png")
