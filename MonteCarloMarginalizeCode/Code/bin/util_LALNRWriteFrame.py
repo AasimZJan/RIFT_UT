@@ -7,9 +7,9 @@ import argparse
 import numpy as np
 import RIFT.lalsimutils as lalsimutils
 import lalsimulation as lalsim
-import lalframe
 import lal
 import h5py
+import sys
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--fname", default=None, help = "Base name for output frame file. Otherwise auto-generated ")
@@ -26,7 +26,7 @@ parser.add_argument("--fref", dest='fref', type=float, default=0.0, help="Wavefo
 parser.add_argument("--incl",default=None,help="Set the inclination of L (at fref). Particularly helpful for aligned spin tests")
 parser.add_argument("--mass1",default=10,type=float,help='Mass 1 (solar masses)')
 parser.add_argument("--mass2",default=1.4,type=float,help='Mass 2 (solar masses)')
-parser.add_argument("--l-max",default=None,type=float,help='Inclusion of modes in injection')
+parser.add_argument("--l-max",default=None,type=int,help='Inclusion of modes in injection')
 parser.add_argument("--path-to-hdf5", help='Path to NRhdf5 file. This needs to be in the LVK format')
 parser.add_argument("--modes-list", default=None, help="List of specific modes you want to use. Set l-max to None if you want to use this option.")
 parser.add_argument("--verbose", action="store_true",default=False)
@@ -63,6 +63,7 @@ def generate_polarizations_from_NRhdf5(P, path_to_hdf5):
     params = lal.CreateDict()
     modes = []
     lmax = opts.l_max
+    only_mode = eval(opts.modes_list)
     if opts.modes_list == None and lmax is not None:
         for l in range(2,lmax+1):
             for m in range(-l,0):
@@ -100,7 +101,7 @@ def generate_polarizations_from_NRhdf5(P, path_to_hdf5):
     return h_p, h_c
 
 
-def hoft(P, path_to_hdf5):
+def hoft(P, path_to_hdf5, Fp=None, Fc=None):
 
     P_copy = P.manual_copy()
     hp, hc = generate_polarizations_from_NRhdf5(P_copy, opts.path_to_hdf5) 
