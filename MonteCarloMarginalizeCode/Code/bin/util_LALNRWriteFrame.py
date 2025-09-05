@@ -105,7 +105,7 @@ def generate_polarizations_from_NRhdf5(P, path_to_hdf5):
 def hoft(P, path_to_hdf5, Fp=None, Fc=None):
 
     P_copy = P.manual_copy()
-    hp, hc = generate_polarizations_from_NRhdf5(P_copy, opts.path_to_hdf5) 
+    hp, hc = generate_polarizations_from_NRhdf5(P_copy, path_to_hdf5) 
 
     # Apply detector response
     if Fp!=None and Fc!=None:
