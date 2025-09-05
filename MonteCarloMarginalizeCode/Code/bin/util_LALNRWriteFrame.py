@@ -29,7 +29,7 @@ parser.add_argument("--mass1",default=10,type=float,help='Mass 1 (solar masses)'
 parser.add_argument("--mass2",default=1.4,type=float,help='Mass 2 (solar masses)')
 parser.add_argument("--l-max",default=None,type=int,help='Inclusion of modes in injection')
 parser.add_argument("--path-to-hdf5", help='Path to NRhdf5 file. This needs to be in the LVK format')
-parser.add_argument("--modes-list", default=None, help="List of specific modes you want to use. Set l-max to None if you want to use this option.")
+parser.add_argument("--modes-list", type=str, default=None, help="List of specific modes you want to use. Set l-max to None if you want to use this option.")
 parser.add_argument("--verbose", action="store_true",default=False)
 opts=  parser.parse_args()
 
