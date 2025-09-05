@@ -64,7 +64,6 @@ def generate_polarizations_from_NRhdf5(P, path_to_hdf5):
     params = lal.CreateDict()
     modes = []
     lmax = opts.l_max
-    only_mode = eval(opts.modes_list)
     if opts.modes_list == None and lmax is not None:
         for l in range(2,lmax+1):
             for m in range(-l,0):
@@ -72,6 +71,7 @@ def generate_polarizations_from_NRhdf5(P, path_to_hdf5):
             for m in range(1,l+1):
                 modes.append((l,m))
     elif opts.modes_list is not None and lmax is None:
+        only_mode = eval(opts.modes_list)
         for j in only_mode:
             modes.append(j)
     elif only_mode is not None and lmax is not None:
