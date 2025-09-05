@@ -10,6 +10,7 @@ import lalsimulation as lalsim
 import lal
 import h5py
 import sys
+from astropy.time import Time
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--fname", default=None, help = "Base name for output frame file. Otherwise auto-generated ")
