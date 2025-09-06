@@ -47,7 +47,7 @@ def generate_polarizations_from_NRhdf5(P, path_to_hdf5):
     m2 = data_1.attrs["mass2"] * mtotal
     fmin = data_1.attrs["f_lower_at_1MSUN"] * lal.MSUN_SI/mtotal
     fref = 0.0 # set to zero to avoid errors
-    print(f"Smallest possible fmin for this waveform {fmin} Hz. fmin at 1 solar mass is {data_1.attrs['f_lower_at_1MSUN']}. fref is set to 0.0")
+    print(f"Smallest possible fmin for this waveform {fmin} Hz. fmin at 1 solar mass is {data_1.attrs['f_lower_at_1MSUN']}. fref is set to {fref} Hz.")
 
     # if provided fmin is lower than the waveform can actually have
     if P.fmin < fmin and P.fmin != 0.0:
