@@ -102,7 +102,7 @@ def generate_polarizations_from_NRhdf5(P, path_to_hdf5):
     return h_p, h_c
 
 
-def hoft(P, path_to_hdf5, Fp=None, Fc=None):
+def generate_hoft(P, path_to_hdf5, Fp=None, Fc=None):
 
     P_copy = P.manual_copy()
     hp, hc = generate_polarizations_from_NRhdf5(P_copy, path_to_hdf5) 
@@ -198,7 +198,7 @@ if T_est < opts.seglen:
     print(" Buffer length too short, automating retuning forced ")
 
 # Generate signal
-hoft = hoft(P, opts.path_to_hdf5)   # include translation of source, but NOT interpolation onto regular time grid
+hoft = generate_hoft(P, opts.path_to_hdf5)   # include translation of source, but NOT interpolation onto regular time grid
 epoch_orig = hoft.epoch
 # zero pad to be opts.seglen long, if necessary
 if opts.seglen/hoft.deltaT > hoft.data.length:
