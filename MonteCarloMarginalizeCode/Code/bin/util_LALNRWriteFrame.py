@@ -38,11 +38,11 @@ def generate_polarizations_from_NRhdf5(P, path_to_hdf5):
     print(f"Reading waveform from {path_to_hdf5}")
 
     # get mtotal based on user input. This is in kgs.
-    mtotal= (P.m1 + P.m2) 
+    mtotal= P.m1 + P.m2 
 
     # load in hdf5 file to get masses, mass ratio and fmin
     data_1 = h5py.File(path_to_hdf5,"r")
-    print(data_1.attrs.keys())
+    # print(data_1.attrs.keys())
     m1 = data_1.attrs["mass1"] * mtotal
     m2 = data_1.attrs["mass2"] * mtotal
     fmin = data_1.attrs["f_lower_at_1MSUN"] * lal.MSUN_SI/mtotal
