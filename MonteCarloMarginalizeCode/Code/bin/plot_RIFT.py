@@ -30,12 +30,7 @@ plt.style.use('seaborn-v0_8-poster')
 __author__ = "A. Jan"
 
 # Avoid printing float type
-if hasattr(np, 'set_printoptions'):
-    try:
-        np.set_printoptions(legacy='1.25')
-    except TypeError:
-        # Fallback for older versions or invalid legacy
-        np.set_printoptions()
+#np.set_printoptions(legacy='1.25')
 
 # Default colors
 default_colors=['black', "#FF0000", "#FF7F00", "#FFFF00", "#7FFF00", "#00FF00", "#00FFFF", "#007FFF", "#0000FF", "#4B0082", "#8B00FF"]
@@ -48,12 +43,13 @@ parser.add_argument("--path", default = os.getcwd(), help =  "path to run direct
 parser.add_argument("--LISA", action = "store_true", help = "Use this argument if analyzing a LISA run")
 parser.add_argument("--eccentric", action = "store_true", help = "Use this argument if the run has eccentricity and meanPerAno")
 parser.add_argument("--precessing", action = "store_true", help = "Use this argument if the run is precessing")
+parser.add_argument("--non-spinning", action = "store_true", help = "Use this argument if the run is non-spinning")
 opts = parser.parse_args()
 path = opts.path
 LISA = opts.LISA
 eccentricity = opts.eccentric
 precessing = opts.precessing
-
+non_spinning = opts.non_spinning
 # Print kind of analysis
 messages = []
 if eccentricity:
@@ -62,6 +58,8 @@ if precessing:
     messages.append("Precessing analysis")
 if LISA:
     messages.append("LISA analysis")
+if non_spinning:
+    messages.append("Non spinning analysis")
 if messages:
     print("\n" + "\n".join(messages) + "\n")
 
@@ -690,7 +688,7 @@ def plot_corner(sorted_posterior_file_paths, plot_title, iterations = None, para
         os.system(f"mv {parameter}.png plots/1_D_plots/{parameter}_{plot_title}.png")
         os.system(f"mv {parameter}_cum.png plots/1_D_plots/{parameter}_cum_{plot_title}.png") 
 
-def plot_JS_divergence(posterior_1_path, posterior_2_path, posterior_3_path=None, plot_title=None, threshold=0.007, parameters = ["mc","eta", "m1", "m2", "s1z", "s2z", "chi_eff"]):
+def plot_JS_divergence(posterior_1_path, posterior_2_path, posterior_3_path=None, plot_title=None, threshold=0.007, parameters = ["mc","eta", "m1", "m2"]):
     """
     Plots Jensen-Shannon Divergence (JSD) between two posterior datasets for specified parameters.
 
@@ -700,6 +698,10 @@ def plot_JS_divergence(posterior_1_path, posterior_2_path, posterior_3_path=None
         plot_title (str): Title for the plot and filename.
         parameters (list of str): List of parameters to calculate and plot JSD for.
     """
+    if not(non_spinning):
+        parameters.append("s1z")
+        parameters.append("s2z")
+        parameters.append("chi_eff")
     if LISA:
         parameters.append("dec")
         parameters.append("ra")
@@ -1024,7 +1026,16 @@ if LISA:
         plot_corner([main_posterior_files[-1]], "Final", parameters = ["m1", "m2", "a1z", "a2z", "dec", "ra"], use_truths = use_truths)
         plot_corner([main_posterior_files[-1]], "Final", parameters = ["mtot", "q", "a1z", "a2z", "dec", "ra"], use_truths = use_truths)
 else:
-    plot_corner(main_posterior_files, "Main", iterations = main_iterations, use_truths = use_truths)
+    # block with no spin and no eccentricity + precession
+    if non_spinning:
+        plot_corner(main_posterior_files, "Main",  parameters = ["mc", "eta"], iterations = main_iterations, use_truths = use_truths)
+        plot_corner(main_posterior_files, "Main", parameters = ["m1", "m2"], iterations = main_iterations, use_truths = use_truths)
+        plot_corner([main_posterior_files[-1]], "Final",  parameters = ["mc", "eta"], use_truths = use_truths)
+        plot_corner([main_posterior_files[-1]], "Final", parameters = ["m1", "m2"], use_truths = use_truths)
+    else:
+        plot_corner(main_posterior_files, "Main", iterations = main_iterations, use_truths = use_truths)
+    
+    # block with spins but split based on precession and eccentricity
     if eccentricity and not(precessing):
         plot_corner(main_posterior_files, "Main", parameters = ["mc", "eta", "chi_eff", "eccentricity", "meanPerAno"], iterations = main_iterations, use_truths = use_truths)
         plot_corner(main_posterior_files, "Main", parameters = ["m1", "m2", "s1z", "s2z", "eccentricity", "meanPerAno"], iterations = main_iterations, use_truths = use_truths)
@@ -1043,7 +1054,7 @@ else:
         plot_corner([main_posterior_files[-1]], "Final", parameters = ["mc", "eta", "chi_eff", "chi_p", "eccentricity", "meanPerAno"], use_truths = use_truths)
         plot_corner([main_posterior_files[-1]], "Final", parameters = ["m1", "m2", "s1z", "s2z", "s1x", "s1y", "s2x", "s2y", "eccentricity", "meanPerAno"], use_truths = use_truths)
         plot_corner([main_posterior_files[-1]], "Final", parameters = ["mtot", "q", "s1z", "s2z", "s1x", "s1y", "s2x", "s2y", "eccentricity", "meanPerAno"], use_truths = use_truths)
-    else:
+    elif not(precessing) and not(eccentricity) and not(non_spinning):
         plot_corner(main_posterior_files, "Main", parameters = ["m1", "m2", "s1z", "s2z"], iterations = main_iterations, use_truths = use_truths)
         plot_corner([main_posterior_files[-1]], "Final", use_truths = use_truths)
         plot_corner([main_posterior_files[-1]], "Final", parameters = ["m1", "m2", "s1z", "s2z"], use_truths = use_truths)
