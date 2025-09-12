@@ -729,7 +729,7 @@ for pIndex in np.arange(len(posterior_list)):
                 truths_here[indx] = P_ref.tref
                 continue
             truths_here[indx] = P_ref.extract_param(param_to_extract)
-            if param in [ 'mc', 'm1', 'm2', 'mtotal']:
+            if param in [ 'mc', 'm1', 'm2', 'mtot', 'mtotal']:
                 truths_here[indx] = truths_here[indx]/lal.MSUN_SI
             if param in ['dist', 'distance']:
                 truths_here[indx] = truths_here[indx]/lal.PC_SI/1e6
