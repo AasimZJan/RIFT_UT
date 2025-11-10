@@ -303,6 +303,7 @@ parser.add_argument("--archive-pesummary-event-label",default="this_event",help=
 parser.add_argument("--internal-mitigate-fd-J-frame",default="L_frame",help="L_frame|rotate, choose method to deal with ChooseFDWaveform being in wrong frame. Default is to request L frame for inputs")
 parser.add_argument("--internal-force-puff-iterations", default=4, type=int, help="Number of iterations to be puffed")
 parser.add_argument("--cartesian-spin-puffing", default=True, help='Default puffing is only on chieff_aligned for aligned spin runs, this allows puffing to be carried out in both spin co-ordinates')
+parser.add_argument("--only-primary-spinning", default=False, help="Only sample in primary BH aligned spin component, useful for models like NRHybSur2dq15")
 opts=  parser.parse_args()
 
 
@@ -657,6 +658,8 @@ if opts.assume_matter:
             cmd += " --internal-tabular-eos-file {} ".format(opts.internal_tabular_eos_file)
         if opts.assume_matter_conservatively:
             cmd += " --assume-matter-conservatively "
+if opts.only_primary_spinning:
+    opts.assume_nospin=True
 if  opts.assume_nospin:
     cmd += " --assume-nospin "
 else:  
@@ -895,11 +898,13 @@ if opts.use_EFPE:
 elif not 'NR' in opts.approx:
         line += " --approx " + opts.approx
 elif opts.use_gwsurrogate and 'NRHybSur' in opts.approx:
-        line += " --rom-group {} --rom-param NRHybSur3dq8.h5 --approx {} ".format(sur_location_prefix,opts.approx)
+	line += " --rom-group {0} --rom-param {1}.h5 --approx {1} ".format(sur_location_prefix,opts.approx)
 elif opts.use_gwsurrogate and "NRSur7dq2" in opts.approx:
         line += " --rom-group {} --rom-param NRSur7dq2.h5 --approx {}  ".format(sur_location_prefix,opts.approx)
 elif opts.use_gwsurrogate and "NRSur7dq4" in opts.approx:
         line += " --rom-group {} --rom-param NRSur7dq4.h5  --approx {}".format(sur_location_prefix,opts.approx)
+elif opts.use_gwsurrogate and "BHPT" in opts.approx:
+        line += " --rom-group {0} --rom-param {1}.h5 --approx {1} ".format(sur_location_prefix,opts.approx)
 elif ("SEOBNR" in opts.approx) or ("NRHybSur" in opts.approx) or ("NRSur7d" in opts.approx) or ("NRTidal" in opts.approx): 
         line += " --approx " + opts.approx
 else:
@@ -1129,6 +1134,10 @@ for indx in np.arange(len(instructions_cip)):
 
     if opts.fit_save_gp:
         line += " --fit-save-gp my_gp "  # fiducial filename, stored in each iteration
+    if opts.only_primary_spinning:
+        line +=" --parameter s1z "
+        if not(opts.force_chi_max is None):
+            line +=f" --chi-max {opts.force_chi_max} "
     if opts.assume_eccentric:
         if opts.use_meanPerAno:
             line += " --parameter meanPerAno --use-meanPerAno "
@@ -1252,10 +1261,16 @@ if opts.assume_eccentric:
 if opts.assume_highq:
         puff_params = puff_params.replace(' delta_mc ', ' eta ')  # use natural coordinates in the high q strategy. May want to do this always
         puff_max_it +=3
-                                                                                                                                
+if opts.only_primary_spinning:
+        puff_params += " --parameter s1z  "
+        if not(opts.force_chi_max is None):
+            puff_params += "--downselect-parameter chi1 --downselect-parameter-range [0,{}]  ".format(opts.force_chi_max)
+                                                                                                                            
 with open("args_puff.txt",'w') as f:
         puff_args =''  # note used below
-        if opts.force_chi_max and not(opts.force_chi_small_max):
+        if opts.assume_nospin:
+            puff_args=puff_params
+        elif opts.force_chi_max and not(opts.force_chi_small_max):
             puff_args = puff_params + " --downselect-parameter chi1 --downselect-parameter-range [0,{}]  ".format(opts.force_chi_max)
         elif not(opts.force_chi_max) and (opts.force_chi_small_max):
             puff_args = puff_params + " --downselect-parameter chi2 --downselect-parameter-range [0,{}]  ".format(opts.force_chi_small_max)

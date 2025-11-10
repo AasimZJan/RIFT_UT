@@ -1,4 +1,5 @@
 #
+# Adding surrogate models from gwsurrogate
 
 debug_output = False
 rosDebug = False
@@ -258,6 +259,10 @@ class WaveformModeCatalog:
             my_converter = ConvertWPtoSurrogateParamsPrecessingFull
             self.single_mode_sur=False
             reflection_symmetric=False
+        if 'BHPT' in param:
+            print(" GENERATING ppBHPT WAVEFORM WITH ALIGNED SPIN PARAMETERS (NONSPINNING) ")
+            my_converter = ConvertWPtoSurrogateParamsAligned
+            self.single_mode_sur=False
         # PENDING: General-purpose interface, based on the coordinate string specified. SHOULD look up these names from the surrogate!
         def convert_coords(P):
             vals_out = np.zeros(len(coord_names_internal))
@@ -293,6 +298,20 @@ class WaveformModeCatalog:
             #     self.post_dict_complex_coef[mode] = lambda x:x  #  to coefficients.
             #     self.parameter_convert[mode] =  my_converter #  ConvertWPtoSurrogateParams   # default conversion routine
 #            return
+        elif 'BHPT' in param:
+            bhpt_modes_list = [(2,2),(2,1),(3,1),(3,2),(3,3),(4,2),(4,3),(4,4),(5,3), (5,4),(5,5),(6,4),(6,5),(6,6),(7,5),(7,6),(7,7),(8,6),(8,7),(8,8),(9,7),(9,8),(9,9),(10,8),(10,9)]
+            lm_list = [mode for mode in lm_list if mode in bhpt_modes_list] # only call modes that are in lm_list and available in the surrogate model
+            self.sur = gws.EvaluateSurrogate(dirBaseFiles +'/'+group+param , ell_m=lm_list)   # get the dimensinoless surrogate file?
+            raw_modes = list(self.sur.single_mode_dict.keys())  # raw modes
+            reflection_symmetric = True
+            self.modes_available=[]
+            t = self.sur.time_grid()
+            #print(raw_modes)
+            #print(t)
+            self.ToverMmin = t.min()
+            self.ToverMmax = t.max()
+            self.ToverM_peak=0   # Need to figure out where this is?  Let's assume it is zero to make my life easier
+        #            return
         elif 'NRSur7dq4' in param:
             print(param)
             self.sur = gws.LoadSurrogate(dirBaseFiles +'/'+group+param)   # get the dimensinoless surrogate file?
@@ -742,6 +761,25 @@ class WaveformModeCatalog:
             for mode in self.modes_available:
                 hlmT_dimensionless[mode] = np.zeros(len(tvals_dimensionless),dtype=complex)
                 hlmT_dimensionless[mode][indx_ok] = hlmT_dimensionless_narrow[mode]/fac  # undo scaling if needed
+
+        if 'BHPT' in self.param:
+            params_here = self.parameter_convert[(2,2)](P)
+            tvals_dimensionless= tvals/m_total_s + self.ToverM_peak
+            indx_ok = np.logical_and(tvals_dimensionless  > self.ToverMmin , tvals_dimensionless < self.ToverMmax)
+            hlmT ={}
+            taper_end_duration =None
+            if rom_taper_end:
+                taper_end_duration =40.0
+            modes_to_evaluate, t_mode, hp_full, hc_full = self.sur(params_here[0], times=tvals_dimensionless[indx_ok], mode_sum=False)
+            hlmT_dimensionless_narrow = {}
+            ii = 0
+            for mode in modes_to_evaluate:
+                hlmT_dimensionless_narrow[mode] = hp_full[:,ii]-1j*hc_full[:,ii]
+                ii+=1
+            for mode in self.modes_available:
+                hlmT_dimensionless[mode] = np.zeros(len(tvals_dimensionless),dtype=complex)
+                hlmT_dimensionless[mode][indx_ok] = hlmT_dimensionless_narrow[mode]
+
         # Option 1: Use NRHybXXX approach (i.e., generate an hlmoft dictionary...but with its OWN time grid and scaling...very annoying)
         if 'NRHyb' in self.param:
             params_here = self.parameter_convert[(2,2)](P)
