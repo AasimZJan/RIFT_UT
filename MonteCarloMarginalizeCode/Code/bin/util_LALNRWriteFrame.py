@@ -69,7 +69,7 @@ def generate_polarizations_from_NRhdf5(P, path_to_hdf5):
         raise ValueError("Use either l_max or modes_list, not both.")
     else:
         raise ValueError("One of l_max or modes_list must be provided.")
-    print(f"Modes used = {modes}")
+    print(f"Modes requested = {modes}")
     ma = lalsim.SimInspiralCreateModeArray()
     for l,m in modes:
         lalsim.SimInspiralModeArrayActivateMode(ma, l, m)
@@ -93,7 +93,7 @@ def generate_polarizations_from_NRhdf5(P, path_to_hdf5):
 
     return h_p, h_c
 
-def get_lvk_modes_from_SXS(P, simulation_name, modes_list=opts.modes_list, l_max=opts.l_max, set_fref_equal_to_flow=True):
+def get_lvk_modes_from_SXS(P, simulation_name, modes_list=opts.modes_list, l_max=opts.l_max, set_fref_equal_to_fmin=True):
     print(f"Loading SXS waveform {simulation_name}")
     # Load metadata
     sim = sxs.load(simulation_name)
@@ -144,7 +144,7 @@ def get_lvk_modes_from_SXS(P, simulation_name, modes_list=opts.modes_list, l_max
         raise ValueError("Use either l_max or modes_list, not both.")
     else:
         raise ValueError("One of l_max or modes_list must be provided.")
-    print(f"Modes used = {modes}")
+    print(f"Modes requested = {modes}")
     
     # Now we use dt and fmin to generate modes
     dt_in_code_units = P.deltaT / code_units_to_sec * lal.MSUN_SI/mtotal
@@ -152,10 +152,15 @@ def get_lvk_modes_from_SXS(P, simulation_name, modes_list=opts.modes_list, l_max
     fmin_in_code_units = fmin * (mtotal/lal.MSUN_SI) * code_units_to_sec
     fref_in_code_units = fref * (mtotal/lal.MSUN_SI) * code_units_to_sec
     # This function gives weird results for eccentric waveform if f_ref is different than f_low
-    if set_fref_equal_to_flow:
+    if set_fref_equal_to_fmin:
         fref_in_code_units = fmin_in_code_units
     times, hlms_dict, dyn = sim.to_lvk(f_ref=fref_in_code_units, ell_max=l_max, dt=dt_in_code_units, f_low=fmin_in_code_units)
-
+    if modes_list is not None:
+        missing_modes = [mode for mode in modes_list if mode not in hlms_dict]
+        if missing_modes:
+            print(f"WARNING: The following modes are not present and will be ignored: {missing_modes}")
+        modes = [mode for mode in modes_list if mode in hlms_dict]
+    
     # collect modes
     hlm = {}
     # remove junk radiation, which I have found to be usually within 150M of the start.
