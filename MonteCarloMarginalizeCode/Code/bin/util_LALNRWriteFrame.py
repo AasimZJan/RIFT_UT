@@ -9,6 +9,7 @@ import lalsimulation as lalsim
 import lal
 import h5py
 from astropy.time import Time
+import romspline
 try:
     import sxs
 except:
@@ -34,10 +35,19 @@ parser.add_argument("--sxs-simulation-name", type=str, default=None, help="SXS s
 parser.add_argument("--verbose", action="store_true",default=False)
 opts=  parser.parse_args()
 
-def generate_polarizations_from_NRhdf5(P, path_to_hdf5):
+def get_lvk_modes_from_NRhdf5(P, path_to_hdf5, modes_list=opts.modes_list, l_max=opts.l_max):
+
     print(f"Reading waveform from {path_to_hdf5}")
+
+    # Converstion factors using lal
+    kgs_to_sec = lal.G_SI/lal.C_SI**3
+    code_units_to_sec = lal.MTSUN_SI 
+    meters_to_sec = 1/lal.C_SI
+
     # get mtotal based on user input. This is in kgs.
     mtotal= P.m1 + P.m2 
+    mtot_in_sec = mtotal * kgs_to_sec
+    dist_in_sec = P.dist * meters_to_sec # distance in m
 
     # load in hdf5 file to get masses and fmin
     data_1 = h5py.File(path_to_hdf5,"r")
@@ -46,52 +56,72 @@ def generate_polarizations_from_NRhdf5(P, path_to_hdf5):
     fref = 0.0 # set to zero to avoid errors
     print(f"Smallest possible frequency for this waveform {fmin} Hz. Frequency at 1 solar mass is {data_1.attrs['f_lower_at_1MSUN']}.\nReference frequency is set to {fref} Hz since the lalsimulation function does not take non-zero reference frequency.")
 
-    # if provided fmin is lower than the waveform can actually have
-    if P.fmin < fmin and P.fmin != 0.0:
-        fmin = fmin + 0.5*10**(-2)*fmin
-        print(f"WARNING: Can't have fmin less than that of the NR waveform. Provided fmin is {P.fmin} Hz, defaulting to fmin={fmin} Hz.")
-    else:
-        fmin = P.fmin
-        print(f"Generating waveform with fmin is {P.fmin} Hz.")
-
     # get spins, useful for precessing case
     s1x, s1y, s1z, s2x, s2y, s2z = lalsim.SimInspiralNRWaveformGetSpinsFromHDF5File(fref, mtotal/lal.MSUN_SI, path_to_hdf5)
 
-    # extract modes, either using l-max or modes-list option
-    params = lal.CreateDict()
-    modes = []
-    lmax = opts.l_max
-    if opts.modes_list == None and lmax is not None:
-        modes = [(l, m) for l in range(2, lmax + 1) for m in range(-l, l + 1) if m != 0]
-    elif opts.modes_list is not None and lmax is None:
-        modes = list(eval(opts.modes_list))
-    elif opts.modes_list is not None and lmax is not None:
+     # Collect modes based on input
+    if modes_list == None and l_max is not None:
+        modes = [(l, m) for l in range(2, l_max + 1) for m in range(-l, l + 1) if m != 0]
+    elif modes_list is not None and l_max is None:
+        modes = list(eval(modes_list))
+    elif modes_list is not None and l_max is not None:
         raise ValueError("Use either l_max or modes_list, not both.")
     else:
         raise ValueError("One of l_max or modes_list must be provided.")
-    print(f"Modes requested = {modes}")
-    ma = lalsim.SimInspiralCreateModeArray()
-    for l,m in modes:
-        lalsim.SimInspiralModeArrayActivateMode(ma, l, m)
     
-    # pass modes and hdf5 path to lalDict object 
-    lalsim.SimInspiralWaveformParamsInsertModeArray(params, ma)
-    lalsim.SimInspiralWaveformParamsInsertNumRelData(params, path_to_hdf5)
+    print(f"Generating waveform with m1 = {m1/lal.MSUN_SI:0.4f} MSUN, m2 = {m2/lal.MSUN_SI:0.4f} MSUN \n s1 = {[s1x, s1y, s1z]}, s2 = {[s2x, s2y, s2z]}, eccentricity = {data_1.attrs['eccentricity']}, meanPerAno = {data_1.attrs['mean_anomaly']}, \n fmin = {fmin} Hz, fref= {fref}")
+    print(f"Modes requested = {modes}")
+    print(f"WARNING: The provided fmin has no effect; the waveform starts at the lowest available frequency of the NR simulation, which is {fmin} Hz.")
+    
+    #interpolating using romspline
+    hlm = {}
+    dt_in_code_units = P.deltaT / code_units_to_sec * lal.MSUN_SI/mtotal
+    for i in range(len(modes)):
+        amp22_time_0=np.array(data_1[f"phase_l{modes[i][0]}_m{modes[i][1]}"]["X"])
 
-    # sanity print statement
-    print(f"Generating waveform with m1 = {m1/lal.MSUN_SI:0.4f} MSUN, m2 = {m2/lal.MSUN_SI:0.4f} MSUN \n s1 = {s1x, s1y, s1z}, s2 = {s2x, s2y, s2z}\n fmin = {fmin} Hz, fref= {fref}")
+        amp = romspline.readSpline(path_to_hdf5, f"amp_l{modes[i][0]}_m{modes[i][1]}")
+        phase = romspline.readSpline(path_to_hdf5, f"phase_l{modes[i][0]}_m{modes[i][1]}")
+        
+        amp22_time_0 = np.arange(np.min(amp22_time_0), np.max(amp22_time_0), dt_in_code_units)
+        generated_amp = amp(amp22_time_0)
+        generated_phase = phase(amp22_time_0)
+        generated_phase = np.unwrap(generated_phase)
 
-    # generate polarizations
-    h_p, h_c = lalsim.SimInspiralChooseTDWaveform(m1, m2, s1x, s1y, s1z, s2x, s2y, s2z, P.dist, P.incl, \
-                P.phiref, P.psi, P.eccentricity, P.meanPerAno, P.deltaT, fmin, fref, params, lalsim.NR_hdf5)
+        mode_content_at_distance = mtot_in_sec/dist_in_sec * generated_amp * np.exp(1j*generated_phase)
 
-    # find epoch: based on the apporach in GWSignal.py
-    amplitude = np.sqrt(h_p.data.data**2 + h_c.data.data**2)
-    max_amp_index = np.argmax(amplitude)
-    print(f"Initial epoch = {h_p.epoch}, updated epoch = {-max_amp_index * h_p.deltaT}")
-    h_p.epoch, h_c.epoch = -max_amp_index * h_p.deltaT, -max_amp_index * h_c.deltaT
+         # Save as a lal object
+        wf = lal.CreateCOMPLEX16TimeSeries("hlm", 0, 0, P.deltaT, lal.DimensionlessUnit, len(mode_content_at_distance))
+        wf.data.data = mode_content_at_distance
 
-    return h_p, h_c
+        # resize
+        if P.deltaF:
+            TDlen = int(1./P.deltaF * 1./P.deltaT)
+            if TDlen < wf.data.length:   # Truncate the series to the desired length, removing data at the *start* (left)
+                wf = lal.ResizeCOMPLEX16TimeSeries(wf, wf.data.length-TDlen, TDlen)
+            elif TDlen > wf.data.length:   # Zero pad, extend at end
+                wf = lal.ResizeCOMPLEX16TimeSeries(wf, 0, TDlen)
+        
+        # tapering
+        taper = True
+        if taper and P.deltaF is not None:
+            TDlen = int(1./P.deltaF * 1./P.deltaT)
+            ntaper = int(0.05*TDlen)
+            vectaper= 0.5 - 0.5*np.cos(np.pi*np.arange(ntaper)/(1.*ntaper))
+            # Taper at the start of the segment
+            wf.data.data[:ntaper]*=vectaper
+        hlm[modes[i][0],modes[i][1]] = wf
+    
+    # set epoch based on GWsignal approach
+    rhosq = np.zeros(TDlen)
+    for mode in hlm:
+        rhosq += np.abs(hlm[mode].data.data)**2
+    indx_max = np.argmax(rhosq)
+    new_epoch = - indx_max*P.deltaT
+    for mode in hlm:
+        hlm[mode].epoch = new_epoch
+
+    return hlm
+
 
 def get_lvk_modes_from_SXS(P, simulation_name, modes_list=opts.modes_list, l_max=opts.l_max, set_fref_equal_to_fmin=True):
     print(f"Loading SXS waveform {simulation_name}")
@@ -135,11 +165,11 @@ def get_lvk_modes_from_SXS(P, simulation_name, modes_list=opts.modes_list, l_max
     print(f"Generating waveform with m1 = {m1/lal.MSUN_SI:0.4f} MSUN, m2 = {m2/lal.MSUN_SI:0.4f} MSUN \n s1 = {sim.metadata['reference_dimensionless_spin1']}, s2 = {sim.metadata['reference_dimensionless_spin2']}, eccentricity = {sim.metadata['reference_eccentricity']}, meanAnomaly = {sim.metadata['reference_mean_anomaly']}\n fmin = {fmin} Hz")
 
     # Collect modes based on input
-    modes = []
     if modes_list == None and l_max is not None:
         modes = [(l, m) for l in range(2, l_max + 1) for m in range(-l, l + 1) if m != 0]
     elif modes_list is not None and l_max is None:
         modes = list(eval(modes_list))
+        l_max = np.max(np.array(modes)[:, 0])
     elif modes_list is not None and l_max is not None:
         raise ValueError("Use either l_max or modes_list, not both.")
     else:
@@ -190,8 +220,6 @@ def get_lvk_modes_from_SXS(P, simulation_name, modes_list=opts.modes_list, l_max
         taper = True
         if taper:
             ntaper = int(0.01*TDlen)
-            if P.fmin > 0: # avoid failure if waveform start frequency 0 is nominally specified
-                ntaper = np.max([ntaper, int(1./(P.fmin*P.deltaT))])
             vectaper= 0.5 - 0.5*np.cos(np.pi*np.arange(ntaper)/(1.*ntaper))
             # Taper at the start of the segment
             wf.data.data[:ntaper]*=vectaper
@@ -206,12 +234,24 @@ def get_lvk_modes_from_SXS(P, simulation_name, modes_list=opts.modes_list, l_max
     for mode in hlm:
         hlm[mode].epoch = new_epoch
     return hlm
+
+def get_polarizations_from_modes(P, hlms):
+    hp = lal.CreateREAL8TimeSeries("hp", lal.LIGOTimeGPS(0.), 0., hlms[2,2].deltaT, lal.DimensionlessUnit, hlms[2,2].data.length)
+    hc = lal.CreateREAL8TimeSeries("hc", lal.LIGOTimeGPS(0.), 0., hlms[2,2].deltaT, lal.DimensionlessUnit, hlms[2,2].data.length)
+    hp.epoch = hlms[(2,2)].epoch
+    hc.epoch = hlms[(2,2)].epoch
     
+    wfmTS = lal.CreateCOMPLEX16TimeSeries("wfmTS", lal.LIGOTimeGPS(0.), 0., hlms[2,2].deltaT, lal.DimensionlessUnit, hlms[2,2].data.length)
+    wfmTS.epoch = hlms[(2,2)].epoch
+    for mode in list(hlms.keys()):
+        wfmTS.data.data +=  hlms[mode].data.data*lal.SpinWeightedSphericalHarmonic(P.incl, P.phiref, -2, int(mode[0]), int(mode[1]))
+    
+    hp.data.data = np.real(wfmTS.data.data)
+    hc.data.data = -1*np.imag(wfmTS.data.data)
 
-def generate_hoft(P, path_to_hdf5, Fp=None, Fc=None):
+    return hp, hc
 
-    P_copy = P.manual_copy()
-    hp, hc = generate_polarizations_from_NRhdf5(P_copy, path_to_hdf5) 
+def generate_hoft(P, hp, hc, Fp=None, Fc=None):
 
     # Apply detector response
     if Fp!=None and Fc!=None:
@@ -242,23 +282,10 @@ def generate_hoft(P, path_to_hdf5, Fp=None, Fc=None):
     # Resize such that TDlen = 1/deltaF
     if P.deltaF is not None:
         TDlen = int(1./P.deltaF * 1./P.deltaT)
-        assert TDlen >= ht.data.length, f"TDlen = {TDlen}, data_length = {ht.data.length}, 1/deltaT = {1/P.deltaT}, 1/deltaF = {1/P.deltaF}"
-        if TDlen < ht.data.length:
-            print(f'Data removed from {TDlen}:{ht.data.length}.') 
-        ht = lal.ResizeREAL8TimeSeries(ht, 0, TDlen)
-
-    # Match lalsimutils tapering
-    try:
-        taper=True 
-        if taper :
-            ntaper = int(0.01*TDlen)
-            if P.fmin > 0: # avoid failure if waveform start frequency 0 is nominally specified
-                ntaper = np.max([ntaper, int(1./(P.fmin*P.deltaT))])
-            vectaper= 0.5 - 0.5*np.cos(np.pi*np.arange(ntaper)/(1.*ntaper))
-            # Taper at the start of the segment
-            ht.data.data[:ntaper]*=vectaper
-    except Exception as e:
-        print("Couldn't apply tapering", e)
+        if TDlen < ht.data.length:   # Truncate the series to the desired length, removing data at the *start* (left)
+            ht = lal.ResizeREAL8TimeSeries(ht, ht.data.length-TDlen, TDlen)
+        elif TDlen > ht.data.length:   # Zero pad, extend at end
+            ht = lal.ResizeREAL8TimeSeries(ht, 0, TDlen)
     return ht
 
 # Generate signal
@@ -306,9 +333,10 @@ if T_est < opts.seglen:
 # Generate signal
 if opts.sxs_simulation_name is not None:
     hlms = get_lvk_modes_from_SXS(P, opts.sxs_simulation_name)
-    hoft = lalsimutils.hoft_from_hlm(hlms, P)
 else:
-    hoft = generate_hoft(P, opts.path_to_hdf5)   # include translation of source, but NOT interpolation onto regular time grid
+    hlms = get_lvk_modes_from_NRhdf5(P, opts.path_to_hdf5)
+hp, hc = get_polarizations_from_modes(P, hlms)
+hoft = generate_hoft(P, hp, hc)
 epoch_orig = hoft.epoch
 # zero pad to be opts.seglen long, if necessary
 if opts.seglen/hoft.deltaT > hoft.data.length:
