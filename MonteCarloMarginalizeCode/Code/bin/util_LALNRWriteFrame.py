@@ -92,6 +92,16 @@ def get_lvk_modes_from_NRhdf5(P, path_to_hdf5, modes_list=opts.modes_list, l_max
          # Save as a lal object
         wf = lal.CreateCOMPLEX16TimeSeries("hlm", 0, 0, P.deltaT, lal.DimensionlessUnit, len(mode_content_at_distance))
         wf.data.data = mode_content_at_distance
+        
+        # tapering
+        taper = True
+        if taper and P.deltaF is not None:
+            #TDlen = int(1./P.deltaF * 1./P.deltaT)
+            TDlen = wf.data.length
+            ntaper = int(0.05*TDlen)
+            vectaper= 0.5 - 0.5*np.cos(np.pi*np.arange(ntaper)/(1.*ntaper))
+            # Taper at the start of the segment
+            wf.data.data[:ntaper]*=vectaper
 
         # resize
         if P.deltaF:
@@ -101,14 +111,6 @@ def get_lvk_modes_from_NRhdf5(P, path_to_hdf5, modes_list=opts.modes_list, l_max
             elif TDlen > wf.data.length:   # Zero pad, extend at end
                 wf = lal.ResizeCOMPLEX16TimeSeries(wf, 0, TDlen)
         
-        # tapering
-        taper = True
-        if taper and P.deltaF is not None:
-            TDlen = int(1./P.deltaF * 1./P.deltaT)
-            ntaper = int(0.05*TDlen)
-            vectaper= 0.5 - 0.5*np.cos(np.pi*np.arange(ntaper)/(1.*ntaper))
-            # Taper at the start of the segment
-            wf.data.data[:ntaper]*=vectaper
         hlm[modes[i][0],modes[i][1]] = wf
     
     # set epoch based on GWsignal approach
@@ -207,6 +209,15 @@ def get_lvk_modes_from_SXS(P, simulation_name, modes_list=opts.modes_list, l_max
         # Save as a lal object
         wf = lal.CreateCOMPLEX16TimeSeries("hlm", 0, 0, P.deltaT, lal.DimensionlessUnit, len(mode_content_at_distance))
         wf.data.data = mode_content_at_distance
+        
+        # tapering
+        taper = True
+        if taper and P.deltaF is not None:
+            TDlen = wf.data.length
+            ntaper = int(0.05*TDlen)
+            vectaper= 0.5 - 0.5*np.cos(np.pi*np.arange(ntaper)/(1.*ntaper))
+            # Taper at the start of the segment
+            wf.data.data[:ntaper]*=vectaper
 
         # resize
         if P.deltaF:
@@ -216,13 +227,6 @@ def get_lvk_modes_from_SXS(P, simulation_name, modes_list=opts.modes_list, l_max
             elif TDlen > wf.data.length:   # Zero pad, extend at end
                 wf = lal.ResizeCOMPLEX16TimeSeries(wf, 0, TDlen)
         
-        # tapering
-        taper = True
-        if taper:
-            ntaper = int(0.01*TDlen)
-            vectaper= 0.5 - 0.5*np.cos(np.pi*np.arange(ntaper)/(1.*ntaper))
-            # Taper at the start of the segment
-            wf.data.data[:ntaper]*=vectaper
         hlm[modes[i][0],modes[i][1]] = wf
     
     # set epoch based on GWsignal approach
@@ -244,7 +248,7 @@ def get_polarizations_from_modes(P, hlms):
     wfmTS = lal.CreateCOMPLEX16TimeSeries("wfmTS", lal.LIGOTimeGPS(0.), 0., hlms[2,2].deltaT, lal.DimensionlessUnit, hlms[2,2].data.length)
     wfmTS.epoch = hlms[(2,2)].epoch
     for mode in list(hlms.keys()):
-        wfmTS.data.data +=  hlms[mode].data.data*lal.SpinWeightedSphericalHarmonic(P.incl, P.phiref, -2, int(mode[0]), int(mode[1]))
+        wfmTS.data.data +=  hlms[mode].data.data*lal.SpinWeightedSphericalHarmonic(P.incl, -P.phiref, -2, int(mode[0]), int(mode[1]))
     
     hp.data.data = np.real(wfmTS.data.data)
     hc.data.data = -1*np.imag(wfmTS.data.data)
@@ -304,7 +308,7 @@ if not opts.inj:
         P.approx = lalsim.GetApproximantFromString("SpinTaylorT2")
 else:
     from igwn_ligolw import lsctables, table, utils # check all are needed
-
+    #from ligo.lw import lsctables, table, utils
     filename = opts.inj
     event = opts.event_id
     xmldoc = utils.load_filename(filename, verbose = True, contenthandler =lalsimutils.cthdler)
