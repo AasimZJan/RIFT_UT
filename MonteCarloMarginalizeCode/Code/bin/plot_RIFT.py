@@ -1067,7 +1067,7 @@ except:
     try:
         plot_JS_divergence(main_posterior_files[-1], main_posterior_files[-2], None, "Main_iteration") # the last secondlast main iteration
     except:
-        print("Couldn't plot Jensen Shannon Divergence plot")
+        print("Couldn't plot Jensen Shannon Divergence plot.")
 
 # is there a subdag? If not, don't plot!
 if len(subdag_posterior_files) == 0:
@@ -1083,12 +1083,62 @@ if len(subdag_posterior_files) > 8 and analyse_subdag == True:
 # analyze subdag
 if analyse_subdag:
     plot_histograms(subdag_posterior_files, plot_title="Subdag", iterations=subdag_iterations, JSD = False)
-    plot_corner(subdag_posterior_files, "Subdag", iterations = subdag_iterations, use_truths = use_truths)
+    # plot corner plots
+    if LISA:
+        plot_corner(subdag_posterior_files, "Subdag", iterations=subdag_iterations, use_truths=use_truths)
+        if eccentricity:
+            plot_corner(subdag_posterior_files, "Subdag", parameters=["mc", "eta", "chi_eff", "eccentricity", "meanPerAno", "dec", "ra"], iterations=subdag_iterations, use_truths=use_truths)
+            plot_corner(subdag_posterior_files, "Subdag", parameters=["m1", "m2", "a1z", "a2z", "eccentricity", "meanPerAno", "dec", "ra"], iterations=subdag_iterations, use_truths=use_truths)
+            plot_corner([subdag_posterior_files[-1]], "Subdag", parameters=["mc", "eta", "chi_eff", "eccentricity", "meanPerAno", "dec", "ra"], use_truths=use_truths)
+            plot_corner([subdag_posterior_files[-1]], "Subdag", parameters=["m1", "m2", "a1z", "a2z", "eccentricity", "meanPerAno", "dec", "ra"], use_truths=use_truths)
+            plot_corner([subdag_posterior_files[-1]], "Subdag", parameters=["mtot", "q", "a1z", "a2z", "eccentricity", "meanPerAno", "dec", "ra"], use_truths=use_truths)
+        else:
+            plot_corner(subdag_posterior_files, "Subdag", parameters=["mc", "eta", "chi_eff", "dec", "ra"], iterations=subdag_iterations, use_truths=use_truths)
+            plot_corner(subdag_posterior_files, "Subdag", parameters=["m1", "m2", "a1z", "a2z", "dec", "ra"], iterations=subdag_iterations, use_truths=use_truths)
+            plot_corner([subdag_posterior_files[-1]], "Subdag", parameters=["mc", "eta", "chi_eff", "dec", "ra"], use_truths=use_truths)
+            plot_corner([subdag_posterior_files[-1]], "Subdag", parameters=["m1", "m2", "a1z", "a2z", "dec", "ra"], use_truths=use_truths)
+            plot_corner([subdag_posterior_files[-1]], "Subdag", parameters=["mtot", "q", "a1z", "a2z", "dec", "ra"], use_truths=use_truths)
+    else:
+        if non_spinning:
+            plot_corner(subdag_posterior_files, "Subdag", parameters=["mc", "eta"], iterations=subdag_iterations, use_truths=use_truths)
+            plot_corner(subdag_posterior_files, "Subdag", parameters=["m1", "m2"], iterations=subdag_iterations, use_truths=use_truths)
+            plot_corner([subdag_posterior_files[-1]], "Subdag", parameters=["mc", "eta"], use_truths=use_truths)
+            plot_corner([subdag_posterior_files[-1]], "Subdag", parameters=["m1", "m2"], use_truths=use_truths)
+        else:
+            plot_corner(subdag_posterior_files, "Subdag", iterations=subdag_iterations, use_truths=use_truths)
+
+        if eccentricity and not(precessing):
+            plot_corner(subdag_posterior_files, "Subdag", parameters=["mc", "eta", "chi_eff", "eccentricity", "meanPerAno"], iterations=subdag_iterations, use_truths=use_truths)
+            plot_corner(subdag_posterior_files, "Subdag", parameters=["m1", "m2", "s1z", "s2z", "eccentricity", "meanPerAno"], iterations=subdag_iterations, use_truths=use_truths)
+            plot_corner([subdag_posterior_files[-1]], "Subdag", parameters=["mc", "eta", "chi_eff", "eccentricity", "meanPerAno"], use_truths=use_truths)
+            plot_corner([subdag_posterior_files[-1]], "Subdag", parameters=["m1", "m2", "s1z", "s2z", "eccentricity", "meanPerAno"], use_truths=use_truths)
+            plot_corner([subdag_posterior_files[-1]], "Subdag", parameters=["mtot", "q", "s1z", "s2z", "eccentricity", "meanPerAno"], use_truths=use_truths)
+        elif precessing and not(eccentricity):
+            plot_corner(subdag_posterior_files, "Subdag", parameters=["mc", "eta", "chi_eff", "chi_p"], iterations=subdag_iterations, use_truths=use_truths)
+            plot_corner(subdag_posterior_files, "Subdag", parameters=["m1", "m2", "s1z", "s2z", "s1x", "s1y", "s2x", "s2y"], iterations=subdag_iterations, use_truths=use_truths)
+            plot_corner([subdag_posterior_files[-1]], "Subdag", parameters=["mc", "eta", "chi_eff", "chi_p"], use_truths=use_truths)
+            plot_corner([subdag_posterior_files[-1]], "Subdag", parameters=["m1", "m2", "s1z", "s2z", "s1x", "s1y", "s2x", "s2y"], use_truths=use_truths)
+            plot_corner([subdag_posterior_files[-1]], "Subdag", parameters=["mtot", "q", "s1z", "s2z", "s1x", "s1y", "s2x", "s2y"], use_truths=use_truths)
+        elif precessing and eccentricity:
+            plot_corner(subdag_posterior_files, "Subdag", parameters=["mc", "eta", "chi_eff", "chi_p", "eccentricity", "meanPerAno"], iterations=subdag_iterations, use_truths=use_truths)
+            plot_corner(subdag_posterior_files, "Subdag", parameters=["m1", "m2", "s1z", "s2z", "s1x", "s1y", "s2x", "s2y", "eccentricity", "meanPerAno"], iterations=subdag_iterations, use_truths=use_truths)
+            plot_corner([subdag_posterior_files[-1]], "Subdag", parameters=["mc", "eta", "chi_eff", "chi_p", "eccentricity", "meanPerAno"], use_truths=use_truths)
+            plot_corner([subdag_posterior_files[-1]], "Subdag", parameters=["m1", "m2", "s1z", "s2z", "s1x", "s1y", "s2x", "s2y", "eccentricity", "meanPerAno"], use_truths=use_truths)
+            plot_corner([subdag_posterior_files[-1]], "Subdag", parameters=["mtot", "q", "s1z", "s2z", "s1x", "s1y", "s2x", "s2y", "eccentricity", "meanPerAno"], use_truths=use_truths)
+        elif not(precessing) and not(eccentricity) and not(non_spinning):
+            plot_corner(subdag_posterior_files, "Subdag", parameters=["m1", "m2", "s1z", "s2z"], iterations=subdag_iterations, use_truths=use_truths)
+            plot_corner([subdag_posterior_files[-1]], "Subdag", use_truths=use_truths)
+            plot_corner([subdag_posterior_files[-1]], "Subdag", parameters=["m1", "m2", "s1z", "s2z"], use_truths=use_truths)
+            plot_corner([subdag_posterior_files[-1]], "Subdag", parameters=["mtot", "q", "s1z", "s2z"], use_truths=use_truths)
+
     try:
-        plot_JS_divergence(subdag_posterior_files[-1], subdag_posterior_files[-2], None, "Subdag") # the last two subdag iterations
+        plot_JS_divergence(subdag_posterior_files[-1], subdag_posterior_files[-2], None, "Subdag_iteration") # the last two subdag iterations
     except:
-        plot_JS_divergence(subdag_posterior_files[-1], subdag_posterior_files[-2], subdag_posterior_files[-3], "Subdag")
-    plot_JS_divergence(main_posterior_files[-1], subdag_posterior_files[-1], None, "Main") # the last main and subdag iteration
+        try:
+            plot_JS_divergence(subdag_posterior_files[-1], subdag_posterior_files[-2], subdag_posterior_files[-3], "Subdag_iteration")
+        except:
+           print("Couldn't plot Jensen Shannon Divergence plot.") 
+    plot_JS_divergence(main_posterior_files[-1], subdag_posterior_files[-1], None, "Main_subdag_iteration") # the last main and subdag iteration
 
 if check_extrinsic_present(path):
     plot_corner([f"{path}/extrinsic_posterior_samples.dat"], "extrinsic", parameters = ["distance", "incl", "phiorb", "psi", "time"], use_truths = use_truths)
