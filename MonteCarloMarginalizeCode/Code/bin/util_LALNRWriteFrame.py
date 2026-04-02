@@ -91,6 +91,7 @@ def get_lvk_modes_from_NRhdf5(P, path_to_hdf5, modes_list=opts.modes_list, l_max
 
          # Save as a lal object
         wf = lal.CreateCOMPLEX16TimeSeries("hlm", 0, 0, P.deltaT, lal.DimensionlessUnit, len(mode_content_at_distance))
+        wf.data.data *= 0
         wf.data.data = mode_content_at_distance
         
         # tapering
@@ -208,6 +209,7 @@ def get_lvk_modes_from_SXS(P, simulation_name, modes_list=opts.modes_list, l_max
 
         # Save as a lal object
         wf = lal.CreateCOMPLEX16TimeSeries("hlm", 0, 0, P.deltaT, lal.DimensionlessUnit, len(mode_content_at_distance))
+        wf.data.data *= 0
         wf.data.data = mode_content_at_distance
         
         # tapering
@@ -244,9 +246,12 @@ def get_polarizations_from_modes(P, hlms):
     hc = lal.CreateREAL8TimeSeries("hc", lal.LIGOTimeGPS(0.), 0., hlms[2,2].deltaT, lal.DimensionlessUnit, hlms[2,2].data.length)
     hp.epoch = hlms[(2,2)].epoch
     hc.epoch = hlms[(2,2)].epoch
+    hp.data.data *= 0
+    hc.data.data *= 0
     
     wfmTS = lal.CreateCOMPLEX16TimeSeries("wfmTS", lal.LIGOTimeGPS(0.), 0., hlms[2,2].deltaT, lal.DimensionlessUnit, hlms[2,2].data.length)
     wfmTS.epoch = hlms[(2,2)].epoch
+    wfmTS.data.data *= 0
     for mode in list(hlms.keys()):
         wfmTS.data.data +=  hlms[mode].data.data*lal.SpinWeightedSphericalHarmonic(P.incl, -P.phiref, -2, int(mode[0]), int(mode[1]))
     
