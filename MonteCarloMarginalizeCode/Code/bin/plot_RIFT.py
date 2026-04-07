@@ -617,6 +617,24 @@ def plot_histograms(sorted_posterior_file_paths, plot_title, iterations = None, 
         fig.savefig(path+f"/plots/histograms/histogram_{plot_title}_{parameter}.png", bbox_inches='tight')
         plt.close()
 
+def plot_log_likelihood(extrinsic_path):
+    """
+    Plots a histogram of the log-likelihood (lnL) distribution from extrinsic samples file.
+
+    Args:
+        extrinsic_path (str): File path to the extrinsic data file containing sampled parameters.
+                             The file is expected to be readable by NumPy (e.g., whitespace-delimited text).
+                             The log-likelihood values are assumed to be in column index 18.
+    """
+    extrinsic_data = np.loadtxt(extrinsic_path)
+    index_lnL = 18
+    plt.title('lnL distribution')
+    plt.xlabel('lnL')
+    plt.ylabel('Points')
+    plt.hist(extrinsic_data[:, index_lnL], histtype='step', color='black')
+    plt.savefig(path+f"/plots/histograms/histogram_lnL_extrinsic.png", bbox_inches='tight')
+    plt.close()
+
 def plot_corner(sorted_posterior_file_paths, plot_title, iterations = None, parameters = ["mc", "eta", "xi"], use_truths = False):
     """
     Generates corner plots for posterior samples using a specified plotting executable.
@@ -1142,6 +1160,7 @@ if analyse_subdag:
 
 if check_extrinsic_present(path):
     plot_corner([f"{path}/extrinsic_posterior_samples.dat"], "extrinsic", parameters = ["distance", "incl", "phiorb", "psi", "time"], use_truths = use_truths)
+    plot_log_likelihood(path)
 
 # run diagnostics
 evaluate_run(run_diagnostics)
