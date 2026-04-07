@@ -628,11 +628,13 @@ def plot_log_likelihood(extrinsic_path):
     """
     extrinsic_data = np.loadtxt(extrinsic_path+"/extrinsic_posterior_samples.dat")
     index_lnL = 18
+    plt.cla()
     plt.title('lnL distribution')
     plt.xlabel('lnL')
     plt.ylabel('Points')
     plt.hist(extrinsic_data[:, index_lnL], histtype='step', color='black')
     plt.savefig(path+f"/plots/histograms/histogram_lnL_extrinsic.png", bbox_inches='tight')
+    plt.cla()
     plt.close()
 
 def plot_corner(sorted_posterior_file_paths, plot_title, iterations = None, parameters = ["mc", "eta", "xi"], use_truths = False):
