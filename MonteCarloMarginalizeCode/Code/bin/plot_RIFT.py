@@ -632,7 +632,7 @@ def plot_log_likelihood(extrinsic_path):
     plt.title('lnL distribution')
     plt.xlabel('lnL')
     plt.ylabel('Points')
-    plt.hist(extrinsic_data[:, index_lnL], histtype='step', color='black')
+    plt.hist(extrinsic_data[:, index_lnL], histtype='step', color='black', bins=40)
     plt.savefig(path+f"/plots/histograms/histogram_lnL_extrinsic.png", bbox_inches='tight')
     plt.cla()
     plt.close()
