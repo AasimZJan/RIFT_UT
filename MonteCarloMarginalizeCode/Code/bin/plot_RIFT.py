@@ -626,7 +626,7 @@ def plot_log_likelihood(extrinsic_path):
                              The file is expected to be readable by NumPy (e.g., whitespace-delimited text).
                              The log-likelihood values are assumed to be in column index 18.
     """
-    extrinsic_data = np.loadtxt(extrinsic_path)
+    extrinsic_data = np.loadtxt(extrinsic_path+"/extrinsic_posterior_samples.dat")
     index_lnL = 18
     plt.title('lnL distribution')
     plt.xlabel('lnL')
