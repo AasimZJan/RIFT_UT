@@ -94,8 +94,16 @@ def get_lvk_modes_from_NRhdf5(P, path_to_hdf5, modes_list=opts.modes_list, l_max
         wf.data.data *= 0
         wf.data.data = mode_content_at_distance
         
+        # resize
+        if P.deltaF:
+            TDlen = int(1./P.deltaF * 1./P.deltaT)
+            if TDlen < wf.data.length:   # Truncate the series to the desired length, removing data at the *start* (left)
+                wf = lal.ResizeCOMPLEX16TimeSeries(wf, wf.data.length-TDlen, TDlen)
+            elif TDlen > wf.data.length:   # Zero pad, extend at end
+                wf = lal.ResizeCOMPLEX16TimeSeries(wf, 0, TDlen)
+
         # tapering
-        taper = True
+        taper = False
         if taper and P.deltaF is not None:
             #TDlen = int(1./P.deltaF * 1./P.deltaT)
             TDlen = wf.data.length
@@ -104,14 +112,6 @@ def get_lvk_modes_from_NRhdf5(P, path_to_hdf5, modes_list=opts.modes_list, l_max
             # Taper at the start of the segment
             wf.data.data[:ntaper]*=vectaper
 
-        # resize
-        if P.deltaF:
-            TDlen = int(1./P.deltaF * 1./P.deltaT)
-            if TDlen < wf.data.length:   # Truncate the series to the desired length, removing data at the *start* (left)
-                wf = lal.ResizeCOMPLEX16TimeSeries(wf, wf.data.length-TDlen, TDlen)
-            elif TDlen > wf.data.length:   # Zero pad, extend at end
-                wf = lal.ResizeCOMPLEX16TimeSeries(wf, 0, TDlen)
-        
         hlm[modes[i][0],modes[i][1]] = wf
     
     # set epoch based on GWsignal approach
@@ -212,8 +212,16 @@ def get_lvk_modes_from_SXS(P, simulation_name, modes_list=opts.modes_list, l_max
         wf.data.data *= 0
         wf.data.data = mode_content_at_distance
         
+         # resize
+        if P.deltaF:
+            TDlen = int(1./P.deltaF * 1./P.deltaT)
+            if TDlen < wf.data.length:   # Truncate the series to the desired length, removing data at the *start* (left)
+                wf = lal.ResizeCOMPLEX16TimeSeries(wf, wf.data.length-TDlen, TDlen)
+            elif TDlen > wf.data.length:   # Zero pad, extend at end
+                wf = lal.ResizeCOMPLEX16TimeSeries(wf, 0, TDlen)
+
         # tapering
-        taper = True
+        taper = False
         if taper and P.deltaF is not None:
             TDlen = wf.data.length
             ntaper = int(0.05*TDlen)
@@ -221,14 +229,6 @@ def get_lvk_modes_from_SXS(P, simulation_name, modes_list=opts.modes_list, l_max
             # Taper at the start of the segment
             wf.data.data[:ntaper]*=vectaper
 
-        # resize
-        if P.deltaF:
-            TDlen = int(1./P.deltaF * 1./P.deltaT)
-            if TDlen < wf.data.length:   # Truncate the series to the desired length, removing data at the *start* (left)
-                wf = lal.ResizeCOMPLEX16TimeSeries(wf, wf.data.length-TDlen, TDlen)
-            elif TDlen > wf.data.length:   # Zero pad, extend at end
-                wf = lal.ResizeCOMPLEX16TimeSeries(wf, 0, TDlen)
-        
         hlm[modes[i][0],modes[i][1]] = wf
     
     # set epoch based on GWsignal approach
@@ -288,13 +288,6 @@ def generate_hoft(P, hp, hc, Fp=None, Fc=None):
                 P.phi, P.theta, P.psi,
                 lalsim.DetectorPrefixToLALDetector(str(P.detector)))
 
-    # Resize such that TDlen = 1/deltaF
-    if P.deltaF is not None:
-        TDlen = int(1./P.deltaF * 1./P.deltaT)
-        if TDlen < ht.data.length:   # Truncate the series to the desired length, removing data at the *start* (left)
-            ht = lal.ResizeREAL8TimeSeries(ht, ht.data.length-TDlen, TDlen)
-        elif TDlen > ht.data.length:   # Zero pad, extend at end
-            ht = lal.ResizeREAL8TimeSeries(ht, 0, TDlen)
     return ht
 
 # Generate signal
