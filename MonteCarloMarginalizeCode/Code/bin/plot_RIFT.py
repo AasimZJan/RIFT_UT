@@ -185,13 +185,6 @@ def lnL_at_credible_interval(ci=0.99, run_diagnostics=run_diagnostics, return_nd
     Computes the log-likelihood corresponding to the boundary of a
     specified credible interval, assuming a multivariate Gaussian posterior.
 
-    The dimensionality of the Gaussian is inferred from the analysis
-    configuration:
-        - 2D for non-spinning runs
-        - 4D for aligned-spin runs
-        - 6D for eccentric aligned-spin runs
-        - 8D for precessing runs
-
     Args:
         ci (float): Credible interval enclosed by the likelihood contour
             (e.g., 0.90, 0.95, 0.99).
@@ -200,12 +193,7 @@ def lnL_at_credible_interval(ci=0.99, run_diagnostics=run_diagnostics, return_nd
             ``"max_lnL"``.
 
     Returns:
-        tuple: A tuple containing:
             - Log-likelihood at the credible interval boundary (float)
-            - Difference between the returned log-likelihood and the
-              maximum log-likelihood, ``lnL - max_lnL`` (float)
-            - Squared Mahalanobis distance corresponding to the
-              credible interval (float)
     """
     if not (0 < ci < 1):
         raise ValueError("ci must be between 0 and 1, e.g. 0.99")
@@ -729,7 +717,6 @@ def plot_log_likelihood(extrinsic_path):
 
     Args:
         extrinsic_path (str): File path to the extrinsic data file containing sampled parameters.
-                             The file is expected to be readable by NumPy (e.g., whitespace-delimited text).
                              The log-likelihood values are assumed to be in column index 18.
     """
     extrinsic_data = np.loadtxt(extrinsic_path+"/extrinsic_posterior_samples.dat")
