@@ -1009,7 +1009,7 @@ def evaluate_run(run_diagnostics):
     f.write(f"Total number of high marginalized lnL points = {run_diagnostics['total_high_lnL_points']}\n")
     f.write(f"Total number of high marginalized lnL points used = {run_diagnostics['high_lnL_points']}\n")
     f.write(f"Total number of high marginalized lnL points not used due to large error = {run_diagnostics['high_lnL_points_with_large_error']}\n")
-    f.write(f"Approximate SNR captured = {np.sqrt(2*run_diagnostics['max_lnL'])}\n")
+    f.write(f"Approximate SNR captured = {np.sqrt(2*run_diagnostics['max_lnL']):0.2f}\n")
     f.write(f"Number of high lnL points with lnL cut [12, 10, 5, 2] = [{run_diagnostics['high_lnL_points_with_lnLcut_12'], run_diagnostics['high_lnL_points_with_lnLcut_10'], run_diagnostics['high_lnL_points_with_lnLcut_5'], run_diagnostics['high_lnL_points_with_lnLcut_2']}]\n")
     print(run_diagnostics['composite_information'])
     f.write(f"Likelihood exploration data per iteration: \n{run_diagnostics['composite_information']}\n")
