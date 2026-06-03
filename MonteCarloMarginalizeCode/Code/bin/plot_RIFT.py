@@ -14,6 +14,7 @@ import RIFT.lalsimutils as lsu
 from argparse import ArgumentParser
 import corner
 import re
+from scipy.stats import chi2
 
 # Matplotlib configuration
 plt.rcParams.update({
@@ -178,6 +179,54 @@ def get_lnL_cut_points(all_net_path, lnL_cut=15, error_threshold=0.4, composite=
 
         return np.round(max_lnL, 2), no_points
 
+
+def lnL_at_credible_interval(ci=0.99, run_diagnostics=run_diagnostics, return_ndim=False):
+    """
+    Computes the log-likelihood corresponding to the boundary of a
+    specified credible interval, assuming a multivariate Gaussian posterior.
+
+    The dimensionality of the Gaussian is inferred from the analysis
+    configuration:
+        - 2D for non-spinning runs
+        - 4D for aligned-spin runs
+        - 6D for eccentric aligned-spin runs
+        - 8D for precessing runs
+
+    Args:
+        ci (float): Credible interval enclosed by the likelihood contour
+            (e.g., 0.90, 0.95, 0.99).
+        run_diagnostics (dict): Dictionary containing run diagnostics,
+            including the maximum log-likelihood stored under the key
+            ``"max_lnL"``.
+
+    Returns:
+        tuple: A tuple containing:
+            - Log-likelihood at the credible interval boundary (float)
+            - Difference between the returned log-likelihood and the
+              maximum log-likelihood, ``lnL - max_lnL`` (float)
+            - Squared Mahalanobis distance corresponding to the
+              credible interval (float)
+    """
+    if not (0 < ci < 1):
+        raise ValueError("ci must be between 0 and 1, e.g. 0.99")
+
+    ndim = 4
+    if opts.non_spinning:
+        ndim = 2
+    elif opts.precessing:
+        ndim += 4
+    elif opts.eccentric:
+        ndim += 2
+    if return_ndim:
+        return ndim
+    max_lnL = run_diagnostics["max_lnL"]
+
+    r2 = chi2.ppf(ci, df=ndim)
+    delta_lnL = -0.5 * r2
+    lnL = max_lnL + delta_lnL
+
+    return lnL
+
 def create_plots_folder(base_dir_path):
     """
     Creates a 'plots' folder in the specified base directory if it does not already exist.
@@ -259,22 +308,78 @@ def get_sample_statistics(samples):
         sample statistics (numpy.ndarray): An array containing the 16th, 50th, and 84th percentiles 
         of the input samples.
     """
-    return np.percentile(samples, [16,50,84])
+    return np.percentile(samples, [5,50,95])
 
-def get_chi_eff_from_mass_and_spins(posterior):
+def get_combination_from_mass_and_spin(posterior, parameter):
     """
-    Computes the effective spin parameter (χ_eff) from the posterior data.
+    Computes spin combinations from posterior samples.
 
     Args:
-        posterior (numpy.ndarray): Array where each row represents a set of parameters. 
+        posterior (numpy.ndarray): Posterior samples.
+        parameter (str): One of
+            'chi1', 'chi2', 'chi_eff', 'chi_minus', 'chi_p'
 
     Returns:
-        numpy.ndarray: Array of χ_eff values computed from the posterior data.
+        numpy.ndarray: Requested spin combination.
     """
-    parameter_m1, parameter_m2 = get_index_for_parameter("m1"), get_index_for_parameter("m2")
-    parameter_s1z, parameter_s2z = get_index_for_parameter("s1z"), get_index_for_parameter("s2z")
-    return (posterior[:,parameter_m1]*posterior[:,parameter_s1z] + posterior[:,parameter_m2]*posterior[:,parameter_s2z]) / (posterior[:,parameter_m1] + posterior[:,parameter_m2])
 
+    parameter_m1 = get_index_for_parameter("m1")
+    parameter_m2 = get_index_for_parameter("m2")
+
+    parameter_s1x = get_index_for_parameter("s1x")
+    parameter_s1y = get_index_for_parameter("s1y")
+    parameter_s1z = get_index_for_parameter("s1z")
+
+    parameter_s2x = get_index_for_parameter("s2x")
+    parameter_s2y = get_index_for_parameter("s2y")
+    parameter_s2z = get_index_for_parameter("s2z")
+
+    m1 = posterior[:, parameter_m1]
+    m2 = posterior[:, parameter_m2]
+
+    s1x = posterior[:, parameter_s1x]
+    s1y = posterior[:, parameter_s1y]
+    s1z = posterior[:, parameter_s1z]
+
+    s2x = posterior[:, parameter_s2x]
+    s2y = posterior[:, parameter_s2y]
+    s2z = posterior[:, parameter_s2z]
+
+    if parameter == "chi1":
+        return np.sqrt(s1x**2 + s1y**2 + s1z**2)
+
+    elif parameter == "chi2":
+        return np.sqrt(s2x**2 + s2y**2 + s2z**2)
+
+    elif parameter == "chi_eff":
+        return (m1 * s1z + m2 * s2z) / (m1 + m2)
+
+    elif parameter == "chiMinus":
+        return (m1 * s1z - m2 * s2z) / (m1 + m2)
+
+    elif parameter == "chi_p":
+        q = m2 / m1  # assumes m1 >= m2
+
+        chi1_perp = np.sqrt(s1x**2 + s1y**2)
+        chi2_perp = np.sqrt(s2x**2 + s2y**2)
+
+        return np.maximum(
+            chi1_perp,
+            ((4 * q + 3) / (4 + 3 * q)) * q * chi2_perp
+        )
+
+    elif parameter == "chi1_perp":
+        return np.sqrt(s1x**2 + s1y**2)
+
+    elif parameter == "chi2_perp":
+        return np.sqrt(s2x**2 + s2y**2)
+
+
+    else:
+        raise ValueError(
+            f"Unknown parameter '{parameter}'. "
+            "Choose from: chi1, chi2, chi_eff, chiMinus, chi_p"
+        )
 def convert_all_net_to_posterior_format(all_net_path):
     all_net_data = np.loadtxt(all_net_path)
     chirpmass, massratio, eta, totalmass = get_chirpmass_massratio_eta_totalmass_from_componentmasses(all_net_data[:,1], all_net_data[:,2])
@@ -465,26 +570,16 @@ def plot_neff_data(path_to_main_folder):
             print(f"Couldn't plot neff for iteration = {iterations[n]}")
             break
     # read max lnL data from CIP output files
-    print(f"READING lnL FILES FROM iteration_{iterations[iteration_prog]}_cip")
     lnL_files_last_iteration = glob.glob(path_to_main_folder + f"/iteration_{iterations[iteration_prog]}_cip/*lnL*")
     run_diagnostics["latest_grid"] = f"overlap-grid-{iteration_prog+1}.xml.gz"
     run_diagnostics["latest_iteration"] = int(iteration_prog)
-    collect_lnL = []
-    for j in np.arange(len(lnL_files_last_iteration)):
-        data = np.loadtxt(lnL_files_last_iteration[j])
-        collect_lnL.append(np.max(data))
-    collect_lnL = np.array(collect_lnL)
     max_lnL, no_points = get_lnL_cut_points(all_net_path)
-    index = np.argwhere(max_lnL - collect_lnL >= 2)
-    # print, save diagnostics and plot
-    print(f"Max lnL  = {max_lnL}, average max lnL from workers = {np.mean(collect_lnL)} with std = {np.std(collect_lnL)}")
-    print(f"Total number of workers in final iteration = {len(lnL_files_last_iteration)}, number of them which didn't capture max_lnL = {len(index)}")
-    run_diagnostics["cip_average_max_lnL_sampled"] = np.round(np.mean(collect_lnL), 2)
-    run_diagnostics["cip_std_max_lnL_sampled"] = np.round(np.std(collect_lnL), 3)
-    ax.set_title(f"{len(index)} / {len(lnL_files_last_iteration)}")
+    print(f"Total number of workers in final iteration = {len(lnL_files_last_iteration)-1}")
+    ax.set_title(f"Workers = {len(lnL_files_last_iteration)-1}")
     ax.set_xticks(np.arange(0, run_diagnostics["latest_iteration"]+1, 1))
-    fig.savefig(path+f"/plots/Effective_samples_per_worker_plot.png", bbox_inches='tight')
+    fig.savefig(path+f"/plots/Effective_samples_per_CIPworker.png", bbox_inches='tight')
     plt.close(fig)
+
 
 def plot_cip_max_lnL(path_to_main_folder):
     """
@@ -511,10 +606,13 @@ def plot_cip_max_lnL(path_to_main_folder):
             continue
         collect_lnL = []
         collec_lnL_hist = np.zeros((1,1))
+        samples_total = 0
         for j in np.arange(len(files_iteration)):
             data = np.loadtxt(files_iteration[j])
             collect_lnL.append(np.max(data))
+            samples_total += len(data)
             collec_lnL_hist = np.vstack([collec_lnL_hist, data[:, None]])
+        samples_total_per_worker = samples_total/len(files_iteration)
         collec_lnL_hist = np.delete(collec_lnL_hist, 0, 0)
         collect_lnL = np.array(collect_lnL)
         low_1_std, max_lnL_avg_this_iteration, high_1_std  = np.percentile(collect_lnL, [16,50,84])
@@ -527,12 +625,16 @@ def plot_cip_max_lnL(path_to_main_folder):
         ax.errorbar(iteration, max_lnL_avg_this_iteration, yerr = np.array([max_lnL_avg_this_iteration-low_2_std, high_2_std-max_lnL_avg_this_iteration]).reshape(-1,1), color = "royalblue", ecolor = "red", fmt ='.')
         ax.errorbar(iteration, max_lnL_avg_this_iteration, yerr = np.array([max_lnL_avg_this_iteration-low_1_std, high_1_std-max_lnL_avg_this_iteration]).reshape(-1,1), color = "royalblue", ecolor = "green", fmt ='o')
         ax_hist.hist(collec_lnL_hist, label=iteration, histtype='step', linewidth = 1.0, bins=30, density=True)
+    run_diagnostics["cip_average_max_lnL_sampled"] = np.round(np.mean(collect_lnL), 2)
+    run_diagnostics["cip_std_max_lnL_sampled"] = np.round(np.std(collect_lnL), 3)
+    ndim = lnL_at_credible_interval(return_ndim=True)
     ax.set_xlabel('iteration')
     ax.set_ylabel('lnL')
     ax.axhline(y = run_diagnostics['max_lnL'], linestyle = "--", color="black")
-    ax.fill_between(iterations, run_diagnostics['max_lnL']-2, run_diagnostics['max_lnL'], color="green", alpha=0.5)
+    expected_median = lnL_at_credible_interval(ci=0.5)
+    ax.fill_between(iterations, expected_median-1.5, run_diagnostics['max_lnL'], color="green", alpha=0.5)
     ax.set_xticks(iterations)
-    fig.savefig(path+f"/plots/Maximum_sampled_lnL_CIP.png", bbox_inches="tight")
+    fig.savefig(path+f"/plots/Maximum_sampled_lnL_per_CIPworker.png", bbox_inches="tight")
 
     ax_hist.set_xlabel('lnL')
     ax_hist.legend(loc='upper left', frameon=False)
@@ -561,7 +663,7 @@ def plot_histograms(sorted_posterior_file_paths, plot_title, iterations = None, 
     # all_net_data = convert_all_net_to_posterior_format(all_net_path)
     # not_nan_lnL = np.argwhere(all_net_data[:,-3]>=np.max(all_net_data[:,-3]) - 15).flatten()#np.argwhere(~np.isnan(all_net_data[:,-3])).flatten()
     # all_net_data = np.array(all_net_data[not_nan_lnL])
-    parameters =  ["mc", "q", "eta", "m1", "m2", "s1z", "s2z", "chi_eff"]
+    parameters =  ["mc", "q", "eta", "m1", "m2", "mtot","s1z", "s2z", "chi_eff","chiMinus","chi1", "chi2"]
     # for LISA include skylocation
     if LISA:
         parameters.append("dec")
@@ -574,6 +676,9 @@ def plot_histograms(sorted_posterior_file_paths, plot_title, iterations = None, 
         parameters.append("s1y")
         parameters.append("s2x")
         parameters.append("s2y")
+        parameters.append("chi_p")
+        parameters.append("chi1_perp")
+        parameters.append("chi2_perp")
     for parameter in parameters:
         print(f"Plotting histogram for {parameter}")
         fig, ax = plt.subplots()
@@ -582,16 +687,17 @@ def plot_histograms(sorted_posterior_file_paths, plot_title, iterations = None, 
         ax.set_yticks([])
         for i in np.arange(len(sorted_posterior_file_paths)):
             line_label = str(iterations[i])
-            if parameter == "chi_eff":
+            if parameter in ["chi_eff", "chiMinus", "chi_p", "chi1", "chi2", "chi1_perp", "chi2_perp"]:
                 posterior_data = np.loadtxt(sorted_posterior_file_paths[i])
-                data = get_chi_eff_from_mass_and_spins(posterior_data)
+                #data = get_chi_eff_from_mass_and_spins(posterior_data)
+                data = get_combination_from_mass_and_spin(posterior_data, parameter)
             else:
                 parameter_index = get_index_for_parameter(parameter)
                 data = np.loadtxt(sorted_posterior_file_paths[i])[:,parameter_index]
             if i > 0 and JSD:
                 JS_test = calculate_JS_divergence(data, data_previous)
                 line_label +=f" ({calculate_JS_divergence(data, data_previous).median:0.3f})"
-            ax.hist(data, label = line_label, histtype="step", bins = 50, density=True, linewidth=1.0, color=default_colors[i])
+            ax.hist(data, label = line_label, histtype="step", bins = 25, density=True, linewidth=1.0, color=default_colors[i])
             if use_truths:
                 factor = 1
                 parameter_extract = parameter
@@ -633,11 +739,11 @@ def plot_log_likelihood(extrinsic_path):
     plt.xlabel('lnL')
     plt.ylabel('Points')
     plt.hist(extrinsic_data[:, index_lnL], histtype='step', color='black', bins=40)
-    plt.savefig(path+f"/plots/histograms/histogram_lnL_extrinsic.png", bbox_inches='tight')
+    plt.savefig(path+f"/plots/lnL_distribution_from_extrinsic_step.png", bbox_inches='tight')
     plt.cla()
     plt.close()
 
-def plot_corner(sorted_posterior_file_paths, plot_title, iterations = None, parameters = ["mc", "eta", "xi"], use_truths = False):
+def plot_corner(sorted_posterior_file_paths, plot_title, iterations = None, parameters = ["mc", "eta", "chi_eff"], use_truths = False):
     """
     Generates corner plots for posterior samples using a specified plotting executable.
 
@@ -648,6 +754,11 @@ def plot_corner(sorted_posterior_file_paths, plot_title, iterations = None, para
         parameters (list of str): List of parameters to include in the plot. Defaults to ["mc", "eta", "xi"].
         use_truths (bool): Whether to include truth values in the plot. Defaults to False.
     """
+    # for extrinsic, plot ra and dec if not LISA run
+    if plot_title == "extrinsic" and not(LISA):
+        parameters.append("ra")
+        parameters.append("dec")
+
     print(f"\n--> Plotting corner plot for params ({plot_title}) {parameters}")
     max_lnL, no_points = run_diagnostics["max_lnL"], run_diagnostics["high_lnL_points"]  
     title = f"max_lnL={max_lnL:0.2f},points_cut={no_points}" 
@@ -668,11 +779,6 @@ def plot_corner(sorted_posterior_file_paths, plot_title, iterations = None, para
     if plot_title != "Final":
         plotting_command += "--use-all-composite-but-grayscale "
     
-    # for extrinsic, plot ra and dec if not LISA run
-    if plot_title == "extrinsic" and not(LISA):
-        parameters.append("ra")
-        parameters.append("dec")
-
     # Add parameter options to the command
     for parameter in parameters:
         plotting_command += f"--parameter {parameter} "
@@ -708,7 +814,7 @@ def plot_corner(sorted_posterior_file_paths, plot_title, iterations = None, para
         os.system(f"mv {parameter}.png plots/1_D_plots/{parameter}_{plot_title}.png")
         os.system(f"mv {parameter}_cum.png plots/1_D_plots/{parameter}_cum_{plot_title}.png") 
 
-def plot_JS_divergence(posterior_1_path, posterior_2_path, posterior_3_path=None, plot_title=None, threshold=0.007, parameters = ["mc","eta", "m1", "m2"]):
+def plot_JS_divergence(posterior_1_path, posterior_2_path, posterior_3_path=None, plot_title=None, threshold=0.005, parameters = ["mc","eta", "m1", "m2"]):
     """
     Plots Jensen-Shannon Divergence (JSD) between two posterior datasets for specified parameters.
 
@@ -722,6 +828,7 @@ def plot_JS_divergence(posterior_1_path, posterior_2_path, posterior_3_path=None
         parameters.append("s1z")
         parameters.append("s2z")
         parameters.append("chi_eff")
+        parameters.append("chiMinus")
     if LISA:
         parameters.append("dec")
         parameters.append("ra")
@@ -733,6 +840,9 @@ def plot_JS_divergence(posterior_1_path, posterior_2_path, posterior_3_path=None
         parameters.append("s1y")
         parameters.append("s2x")
         parameters.append("s2y")
+        parameters.append("chi_p")
+        parameters.append("chi1_perp")
+        parameters.append("chi2_perp")
     print(f"\n--> Plotting Jensen Shannon Divergence for {parameters} with threshold {threshold}\n")
     posterior_data1 = np.loadtxt(posterior_1_path)
     posterior_data2 = np.loadtxt(posterior_2_path)
@@ -745,11 +855,11 @@ def plot_JS_divergence(posterior_1_path, posterior_2_path, posterior_3_path=None
     run_diagnostics["JSD"][plot_title] = {}
     run_diagnostics["JSD_3"][plot_title] = {}
     for parameter in parameters:
-        if parameter == "chi_eff":
-            data1, data2 = get_chi_eff_from_mass_and_spins(posterior_data1), get_chi_eff_from_mass_and_spins(posterior_data2)
+        if parameter in ["chi_eff", "chiMinus", "chi_p", "chi1", "chi2", "chi1_perp", "chi2_perp"]:
+            data1, data2 = get_combination_from_mass_and_spin(posterior_data1, parameter), get_combination_from_mass_and_spin(posterior_data2, parameter)
             JSD = calculate_JS_divergence(data1, data2)
             if not(posterior_3_path is None):
-                data3 = get_chi_eff_from_mass_and_spins(posterior_data3)
+                data3 = get_combination_from_mass_and_spin(posterior_data3, parameter) 
                 JSD_3 = calculate_JS_divergence(data1, data3)
         else:
             parameter_n = get_index_for_parameter(parameter)
@@ -776,7 +886,7 @@ def plot_JS_divergence(posterior_1_path, posterior_2_path, posterior_3_path=None
     fig.savefig(path+f"/plots/JSD_per_parameter_{plot_title}.png", bbox_inches='tight')
     plt.close(fig)
 
-def write_sample_statistics(posterior, parameters=["mc","eta", "m1", "m2", "s1z", "s2z", "chi_eff"]):
+def write_sample_statistics(posterior, parameters=["mc","eta", "m1", "m2"]):
     """
     Computes and writes sample statistics for specified parameters to a file.
     Args:
@@ -785,6 +895,11 @@ def write_sample_statistics(posterior, parameters=["mc","eta", "m1", "m2", "s1z"
             statistics will be computed. Defaults to
             ["mc", "eta", "m1", "m2", "s1z", "s2z", "chi_eff"].
     """
+    if not(non_spinning):
+        parameters.append("s1z")
+        parameters.append("s2z")
+        parameters.append("chi_eff")
+        parameters.append("chiMinus")
     if LISA:
         parameters.append("dec")
         parameters.append("ra")
@@ -796,16 +911,21 @@ def write_sample_statistics(posterior, parameters=["mc","eta", "m1", "m2", "s1z"
         parameters.append("s1y")
         parameters.append("s2x")
         parameters.append("s2y")
+        parameters.append("chi_p")
+        parameters.append("chi1_perp")
+        parameters.append("chi2_perp")
+        parameters.append("chi1")
+        parameters.append("chi2")
     if use_truths:
         P = lsu.xml_to_ChooseWaveformParams_array(truth_file_path)[0]
     print(f"\n--> Writing sample statistics for parameters: {parameters}")
     posterior = np.loadtxt(posterior)
     f = open(path+f"/plots/sample_statistics.txt", "w")
-    f.write("Note: limits are 68th percentile (1 std)\n")
+    f.write("Note: limits are equal-tailed 90th percentile\n")
     run_diagnostics["sample_statistics"] = {}
     for parameter in parameters:
-        if parameter == 'chi_eff':
-            samples_here = get_chi_eff_from_mass_and_spins(posterior)
+        if parameter in ["chi_eff", "chiMinus", "chi_p", "chi1", "chi2", "chi1_perp", "chi2_perp"]: 
+            samples_here = get_combination_from_mass_and_spin(posterior, parameter) 
         else:
             parameter_n = get_index_for_parameter(parameter)
             samples_here = posterior[:,parameter_n]
@@ -842,27 +962,27 @@ def plot_exploration_corner(all_net_path):
         truths = [ P.extract_param('m1')/lsu.lsu_MSUN, P.extract_param('m2')/lsu.lsu_MSUN, P.extract_param('s1z'), P.extract_param('s2z')]
     if LISA and not(eccentricity):
         use_cols.append([9,10])
-        labels=[r"$m_1$ $(\times 10^6 M_\odot)$", r"$m_2$ $(\times 10^6 M_\odot)$", r"$a_{1z}$", r"$a_{2z}$", r"$\lambda$", r"$\beta$"]
+        labels=[r"$m_1$ $(\times 10^6 M_\odot)$", r"$m_2$ $(\times 10^6 M_\odot)$", r"$\chi_{1z}$", r"$\chi_{2z}$", r"$\lambda$", r"$\beta$"]
         if use_truths:
              truths.append([P.extract_param('lambda'),  P.extract_param('beta')])
     if LISA and eccentricity:
         use_cols.append([9,10,11,12])
-        labels=[r"$m_1$ $(\times 10^6 M_\odot)$", r"$m_2$ $(\times 10^6 M_\odot)$", r"$a_{1z}$", r"$a_{2z}$", r"$\lambda$", r"$\beta$", r'$e_{gw}$', '$l_{gw}$']
+        labels=[r"$m_1$ $(\times 10^6 M_\odot)$", r"$m_2$ $(\times 10^6 M_\odot)$", r"$\chi_{1z}$", r"$\chi_{2z}$", r"$\lambda$", r"$\beta$", r'$e$', '$\ell$']
         if use_truths:
             truths.append([P.extract_param('lambda'),  P.extract_param('beta'), P.extract_param('eccentricity'), P.extract_param('meanPerAno')])
     if not(LISA) and eccentricity:
         use_cols.append([9,10])
-        labels=[r"$m_1$", r"$m_2$", r"$a_{1z}$", r"$a_{2z}$",  r'$e_{gw}$', '$l_{gw}$']
+        labels=[r"$m_1$", r"$m_2$", r"$\chi_{1z}$", r"$\chi_{2z}$",  r'$e$', '$\ell$']
         if use_truths:
             truths.append([P.extract_param('eccentricity'), P.extract_param('meanPerAno')])
         if precessing:
             use_cols.append([3,4,6,7])
-            labels=[r"$m_1$", r"$m_2$", r"$a_{1z}$", r"$a_{2z}$", r'$e_{gw}$', '$l_{gw}$', r"$a_{2z}$", r"$a_{1x}$", r"$a_{1y}$", r"$a_{2x}$", r"$a_{2y}$"]
+            labels=[r"$m_1$", r"$m_2$", r"$\chi_{1z}$", r"$\chi_{2z}$", r'$e$', '$\ell$', r"$\chi_{2z}$", r"$\chi_{1x}$", r"$\chi_{1y}$", r"$\chi_{2x}$", r"$\chi_{2y}$"]
             if use_truths:
                 truths.append([P.extract_param('s1x'), P.extract_param('s1y'), P.extract_param('s2x'), P.extract_param('s2y')])
     if not(LISA) and precessing and not(eccentricity):
         use_cols.append([3,4,6,7])
-        labels=[r"$m_1$", r"$m_2$", r"$a_{1z}$", r"$a_{2z}$", r"$a_{2z}$", r"$a_{1x}$", r"$a_{1y}$", r"$a_{2x}$", r"$a_{2y}$"]
+        labels=[r"$m_1$", r"$m_2$", r"$\chi_{1z}$", r"$\chi_{2z}$", r"$\chi_{2z}$", r"$\chi_{1x}$", r"$\chi_{1y}$", r"$\chi_{2x}$", r"$\chi_{2y}$"]
         if use_truths:
             truths.append([P.extract_param('s1x'), P.extract_param('s1y'), P.extract_param('s2x'), P.extract_param('s2y')])
     # Load all.net
@@ -946,19 +1066,19 @@ def evaluate_run(run_diagnostics):
     for iteration_type in run_diagnostics['JSD']:
         JSD_not_good[iteration_type] = {}
         for param in run_diagnostics['JSD'][iteration_type]:
-            if run_diagnostics['JSD'][iteration_type][param] > 0.01:
+            if run_diagnostics['JSD'][iteration_type][param] > 0.005:
                 JSD_not_good[iteration_type][param] = run_diagnostics['JSD'][iteration_type][param]
     for iteration_type in run_diagnostics['JSD']:
         if len(JSD_not_good[iteration_type]) > 0:
             JSD_is_good = False
     if JSD_is_good is False:
-        f.write(f"\t--> Following parameters have Jensen-Shannon Divergence values greater than 0.01:\n\t   {JSD_not_good}.")
-        f.write(f"\n\t   If the Jensen-Shannon Divergence for any parameter between the last and second-to-last iterations is greater than 0.01, it means the run has not yet converged. In this case, you should rerun the analysis using {run_diagnostics['latest_grid']} as the starting grid. Additionally, copy this run's all.net file to a new file named bonus.composite in your new run directory. \n") 
+        f.write(f"\n\t   If the Jensen-Shannon Divergence for any parameter between the last and second-to-last iterations is greater than 0.005, it means the run has not yet converged. In this case, you should rerun the analysis using {run_diagnostics['latest_grid']} as the starting grid. Additionally, copy this run's all.net file to a new file named bonus.composite in your new run directory. \n") 
         CIP_is_good = False
     # CIP sampling
     f.write(f"\nAverage max lnL sampled by CIP in iteration {run_diagnostics['latest_iteration']} is: {run_diagnostics['cip_average_max_lnL_sampled']} +- {run_diagnostics['cip_std_max_lnL_sampled']}. Max lnL in all.net is {run_diagnostics['max_lnL']}.\n")
-    if run_diagnostics['max_lnL'] - run_diagnostics['cip_average_max_lnL_sampled'] > 2:
-        f.write(f"\t--> The difference between the maximum lnL value from all.net and the average maximum lnL value sampled by CIP is more than 2, which could cause the peak to be slightly shifted. This discrepancy might be because CIP hasn't sampled the peak well enough or due to interpolation errors. If the issue is inadequate sampling (which is more likely in high signal-to-noise ratio cases), you should increase the neff parameter in the CIP sub file, reduce the number of samples requested, and run the CIP script more times (cip-explode-jobs option) (this can be done without setting up a new run). This will help ensure that the peak is accurately sampled and that the number of samples is close to neff. If the problem is due to interpolation errors, consider running additional iterations to have sufficient lnL evaluations around the peak. \n") 
+    expected_median = lnL_at_credible_interval(ci=0.5)
+    if  expected_median - run_diagnostics['cip_average_max_lnL_sampled'] > 1.5: 
+        f.write(f"\t--> The difference between the expected max lnL {expected_median} and the average maximum lnL value sampled by CIP {run_diagnostics['cip_average_max_lnL_sampled']} is more than 1.5, which could cause the peak to be slightly shifted. This discrepancy might be because CIP hasn't sampled the peak well enough or due to interpolation errors. If the issue is inadequate sampling (which is more likely in high signal-to-noise ratio cases), you should increase the neff parameter in the CIP sub file, reduce the number of samples requested, and run the CIP script more times (cip-explode-jobs option) (this can be done without setting up a new run). This will help ensure that the peak is accurately sampled and that the number of samples is close to neff. If the problem is due to interpolation errors, consider running additional iterations to have sufficient lnL evaluations around the peak. \n") 
         CIP_is_good = False
 
     f.write("\n")
@@ -1087,7 +1207,7 @@ except:
     try:
         plot_JS_divergence(main_posterior_files[-1], main_posterior_files[-2], None, "Main_iteration") # the last secondlast main iteration
     except:
-        print("Couldn't plot Jensen Shannon Divergence plot.")
+        print("Couldn't plot Jensen Shannon Divergence plot")
 
 # is there a subdag? If not, don't plot!
 if len(subdag_posterior_files) == 0:
@@ -1100,7 +1220,6 @@ if len(subdag_posterior_files) > 8 and analyse_subdag == True:
     limit_subdag_iterations = 5 
     subdag_posterior_files, subdag_iterations = find_posteriors_in_sub(path, limit_iterations=limit_subdag_iterations)
 
-# analyze subdag
 if analyse_subdag:
     plot_histograms(subdag_posterior_files, plot_title="Subdag", iterations=subdag_iterations, JSD = False)
     # plot corner plots
@@ -1162,6 +1281,7 @@ if analyse_subdag:
 
 if check_extrinsic_present(path):
     plot_corner([f"{path}/extrinsic_posterior_samples.dat"], "extrinsic", parameters = ["distance", "incl", "phiorb", "psi", "time"], use_truths = use_truths)
+    plot_corner([f"{path}/extrinsic_posterior_samples.dat"], "extrinsic_source_mass", parameters = ["m1_source", "m2_source", "mtotal_source"], use_truths = False)
     plot_log_likelihood(path)
 
 # run diagnostics
