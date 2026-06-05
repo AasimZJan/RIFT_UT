@@ -288,7 +288,7 @@ def get_index_for_parameter(parameter):
 
 def get_sample_statistics(samples):
     """
-    Computes statistical percentiles (16th, 50th, and 84th) for a given sample set.
+    Computes statistical percentiles (5th, 50th, and 95th) for a given sample set.
     Args:
         samples (array-like): A list or NumPy array of samples.
 
