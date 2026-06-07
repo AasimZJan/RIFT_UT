@@ -692,7 +692,7 @@ def plot_cip_max_lnL(path_to_main_folder, plot_title):
         ax_hist.hist(collec_lnL_hist, label=iteration, histtype='step', linewidth = 1.0, bins=bins, density=True)
     
     run_diagnostics[plot_title]["cip_average_max_lnL_sampled"] = run_diagnostics[plot_title]['cip_sampled_lnL'][iterations[-1]]['avg']#np.round(np.mean(collect_lnL), 2)
-    run_diagnostics[plot_title]["cip_std_max_lnL_sampled"] = [run_diagnostics[plot_title]['cip_sampled_lnL'][iterations[-1]]['+'], run_diagnostics[plot_title]['cip_sampled_lnL'][iterations[-1]]['-']]#np.round(np.std(collect_lnL), 2)
+    run_diagnostics[plot_title]["cip_std_max_lnL_sampled"] = [run_diagnostics[plot_title]['cip_sampled_lnL'][iterations[-1]]['+']-run_diagnostics[plot_title]["cip_average_max_lnL_sampled"], run_diagnostics[plot_title]["cip_average_max_lnL_sampled"]-run_diagnostics[plot_title]['cip_sampled_lnL'][iterations[-1]]['-']]#np.round(np.std(collect_lnL), 2)
     
     ax.set_xlabel('iteration')
     ax.set_ylabel('lnL')
