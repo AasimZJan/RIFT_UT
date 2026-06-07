@@ -466,7 +466,7 @@ def find_posteriors_in_sub(path_to_main_folder, limit_iterations = None, return_
         index = np.array(index, dtype=int)
         return np.array(posteriors_in_subdag, dtype = str)[index], index + 1
     else:
-        return posteriors_in_subdag, np.arange(len(posteriors_in_subdag))
+        return posteriors_in_subdag, np.arange(len(posteriors_in_subdag)) + 1
 
 def calculate_JS_divergence(data1, data2):
     """
@@ -513,16 +513,17 @@ def plot_neff_data(path_to_main_folder, plot_title):
     """
     print(f"\n--> Plotting n-eff for CIP for {plot_title} iterations.")
     # find CIP folders
-    cip_iteration_folders= glob.glob(path_to_main_folder + "/iteration*cip*")
+    cip_iteration_folders = glob.glob(path_to_main_folder + "/iteration*cip*")
     
     fig, ax = plt.subplots()
     ax.set_xlabel("iteration")
     ax.set_ylabel("neff")
-    iterations=np.arange(len(cip_iteration_folders)) 
+    iterations = np.arange(len(cip_iteration_folders)) 
     
-    # read requested neff from CIP sub files
     run_diagnostics[plot_title] = {}
     run_diagnostics[plot_title]["CIP_neff"] = {}
+
+    # read requested neff from CIP sub files
     for i in range(4):
         filename = f"{path}/CIP_worker{i}.sub"
         try:
@@ -531,14 +532,7 @@ def plot_neff_data(path_to_main_folder, plot_title):
                 matches = re.findall(r"--n-eff\s+([+-]?\d+(?:\.\d+)?)", content)
                 if matches:
                     neff_value = float(matches[-1])
-                    ax.axhline(
-                        y=neff_value,
-                        linestyle="--",
-                        color=default_colors[i],
-                        alpha=1.0,
-                        linewidth=1.0,
-                        label=f"worker {i} neff"
-                    )
+                    ax.axhline(y=neff_value, linestyle="--", color=default_colors[i], alpha=1.0, linewidth=1.0, label=f"worker {i} neff")
                     run_diagnostics[plot_title]["CIP_neff"][f"CIP_worker{i}"] = np.round(neff_value, 2)
                 else:
                     continue
@@ -560,12 +554,12 @@ def plot_neff_data(path_to_main_folder, plot_title):
             if os.path.getsize(f"{i}/neff_data.txt") == 0: 
                 continue
             tmp_ESS_data=np.loadtxt(f"{i}/neff_data.txt", usecols=[2])
-            low, avg, high = np.percentile(tmp_ESS_data, [2.5,50,97.5])
-            low_1_std, avg, high_1_std = np.percentile(tmp_ESS_data, [16,50,84])
+            low, avg, high = np.percentile(tmp_ESS_data, [2.5,50,97.5]) # 2 std
+            low_1_std, avg, high_1_std = np.percentile(tmp_ESS_data, [16,50,84]) # 1 std
             mini, maxi = np.min(tmp_ESS_data), np.max(tmp_ESS_data)
             ax.plot(iterations[n], mini, marker="x", color="black")
             ax.plot(iterations[n], maxi, marker="x", color="black")
-            print(f"neff detail iteration = {iterations[n]}: Average={avg:0.2f}, low 2 std={low:0.2f}, high 2 std={high:0.2f}")
+            print(f"n-eff summary | iteration {iterations[n]:>2} | median = {avg:8.2f} | 95% interval = [{low:8.2f}, {high:8.2f}]")
             ax.errorbar(iterations[n], avg, yerr=np.array([avg-low,high-avg]).reshape(-1, 1), color = "royalblue", ecolor = "red", fmt ='o')
             ax.errorbar(iterations[n], avg, yerr=np.array([avg-low_1_std,high_1_std-avg]).reshape(-1, 1), color = "royalblue", ecolor = "green", fmt ='.')
             run_diagnostics[plot_title]["CIP_neff_achieved"][f"iteration_{n}_neff"] = np.round(avg, 2)
@@ -574,12 +568,12 @@ def plot_neff_data(path_to_main_folder, plot_title):
             #print(f"Couldn't plot neff for iteration = {iterations[n]}")
             #break
             continue  # try plotting all possible cip's incase there is one folder where subdag exists
+    
     # read max lnL data from CIP output files
     lnL_files_last_iteration = glob.glob(path_to_main_folder + f"/iteration_{iterations[iteration_prog]}_cip/*lnL*")
     run_diagnostics[plot_title]["latest_grid"] = f"overlap-grid-{iteration_prog+1}.xml.gz"
     run_diagnostics[plot_title]["latest_iteration"] = int(iteration_prog)
     max_lnL, no_points = get_lnL_cut_points(all_net_path)
-    # print(f"Total number of workers in final iteration = {len(lnL_files_last_iteration)-1}")
     ax.set_title(f"Workers ({plot_title})= {len(lnL_files_last_iteration)-1}")
     ax.set_xticks(np.arange(0, run_diagnostics[plot_title]["latest_iteration"]+1, 1))
     fig.savefig(save_path + f"/plots/Effective_samples_per_CIPworker_{plot_title}.png", bbox_inches='tight')
@@ -651,10 +645,10 @@ def plot_cip_max_lnL(path_to_main_folder, plot_title):
 
     """
     print(f"\n--> Plotting sampled lnL by CIP for {plot_title} iterations.")
+
     iterations = np.arange(0, run_diagnostics[plot_title]["latest_iteration"]+1, 1)
-    run_diagnostics[plot_title]['cip_sampled_lnL'] = {}
-    fig, ax = plt.subplots()
-    fig_hist, ax_hist = plt.subplots()
+
+    # get bins for histograms
     all_lnL_hist = []
     for iteration in iterations:
         try:
@@ -666,6 +660,9 @@ def plot_cip_max_lnL(path_to_main_folder, plot_title):
     all_lnL_hist = np.concatenate(all_lnL_hist)
     bins = np.linspace(np.min(all_lnL_hist), np.max(all_lnL_hist), 40)
 
+    fig, ax = plt.subplots()
+    fig_hist, ax_hist = plt.subplots()
+    run_diagnostics[plot_title]['cip_sampled_lnL'] = {}
     for iteration in iterations:
         run_diagnostics[plot_title]['cip_sampled_lnL'][iteration] = {}
         try:
@@ -683,19 +680,20 @@ def plot_cip_max_lnL(path_to_main_folder, plot_title):
         samples_total_per_worker = samples_total/len(files_iteration)
         collec_lnL_hist = np.delete(collec_lnL_hist, 0, 0)
         collect_lnL = np.array(collect_lnL)
-        low_1_std, max_lnL_avg_this_iteration, high_1_std  = np.percentile(collect_lnL, [16,50,84])
-        low_2_std, max_lnL_avg_this_iteration, high_2_std  = np.percentile(collect_lnL, [2.5,50,97.5])
+        low_1_std, max_lnL_avg_this_iteration, high_1_std  = np.percentile(collect_lnL, [16,50,84]) # 1 std
+        low_2_std, max_lnL_avg_this_iteration, high_2_std  = np.percentile(collect_lnL, [2.5,50,97.5]) # 2 std
         run_diagnostics[plot_title]['cip_sampled_lnL'][iteration].update({
             'avg':np.round(max_lnL_avg_this_iteration, 2),
-            '+':np.round(high_1_std, 2),
-            '-':np.round(low_1_std, 2)})
+            '+':np.round(high_2_std, 2),
+            '-':np.round(low_2_std, 2)})
         
         ax.errorbar(iteration, max_lnL_avg_this_iteration, yerr = np.array([max_lnL_avg_this_iteration-low_2_std, high_2_std-max_lnL_avg_this_iteration]).reshape(-1,1), color = "royalblue", ecolor = "red", fmt ='.')
         ax.errorbar(iteration, max_lnL_avg_this_iteration, yerr = np.array([max_lnL_avg_this_iteration-low_1_std, high_1_std-max_lnL_avg_this_iteration]).reshape(-1,1), color = "royalblue", ecolor = "green", fmt ='o')
         ax_hist.hist(collec_lnL_hist, label=iteration, histtype='step', linewidth = 1.0, bins=bins, density=True)
-    run_diagnostics[plot_title]["cip_average_max_lnL_sampled"] = np.round(np.mean(collect_lnL), 2)
-    run_diagnostics[plot_title]["cip_std_max_lnL_sampled"] = np.round(np.std(collect_lnL), 2)
-    ndim = lnL_at_credible_interval(return_ndim=True)
+    
+    run_diagnostics[plot_title]["cip_average_max_lnL_sampled"] = run_diagnostics[plot_title]['cip_sampled_lnL'][iterations[-1]]['avg']#np.round(np.mean(collect_lnL), 2)
+    run_diagnostics[plot_title]["cip_std_max_lnL_sampled"] = [run_diagnostics[plot_title]['cip_sampled_lnL'][iterations[-1]]['+'], run_diagnostics[plot_title]['cip_sampled_lnL'][iterations[-1]]['-']]#np.round(np.std(collect_lnL), 2)
+    
     ax.set_xlabel('iteration')
     ax.set_ylabel('lnL')
     ax.axhline(y = run_diagnostics['max_lnL'], linestyle = "--", color="black")
@@ -719,14 +717,16 @@ def plot_high_likelihood_expoloration(path_to_main_folder, plot_title):
         plot_title (str): suffix for the plots and filenames.
     """
     print(f"\n--> Plotting likelihood exploration for {plot_title} iterations.")
+
     run_diagnostics[plot_title]["composite_information"] = {}
+    
     fig, ax = plt.subplots()
     ax.set_xlabel("iteration")
     ax.set_ylabel("high lnL points")
     ax.set_title(f"Total high lnL points = {run_diagnostics['high_lnL_points']}, max_lnL = {run_diagnostics['max_lnL']}")
     collect_data = []
     collect_iter = []
-    print("iteration, max lnL (global), high lnL points(iteration), max lnL(iteration), total lnL points(iteration)")
+    print("\nIteration | Global max lnL | High-lnL points | Iteration max lnL | Total lnL points")
     for iteration in np.arange(0, run_diagnostics[plot_title]["latest_iteration"]+1, 1):
         run_diagnostics[plot_title]["composite_information"][iteration] = {}
         try:
@@ -734,7 +734,7 @@ def plot_high_likelihood_expoloration(path_to_main_folder, plot_title):
         except Exception as e:
             print(f"Error loading file {path_to_main_folder}/consolidated_{iteration}.composite: {e}")
             continue
-        print(iteration, max_lnL, no_points, max_lnL_composite, total_points)
+        print(f"{iteration:9d} | {max_lnL:14.2f} | {no_points:15d} | {max_lnL_composite:17.2f} | {total_points:16d}")
         percent_high_lnL_points =  np.round(no_points/total_points*100, 2)
         collect_data.append(no_points)
         collect_iter.append(iteration)
@@ -743,6 +743,7 @@ def plot_high_likelihood_expoloration(path_to_main_folder, plot_title):
                 "max_lnL":max_lnL_composite,
                 "high_lnL_points":no_points,
                 "percent_high_lnL_points": percent_high_lnL_points})
+    
     ax.grid(alpha=0.4)
     ax.plot(collect_iter, collect_data, color = "black", linestyle = "--", linewidth = 1.5, alpha = 0.5)
     ax.set_xticks(np.arange(0, run_diagnostics[plot_title]["latest_iteration"]+1, 1))
@@ -787,15 +788,17 @@ def plot_histograms(sorted_posterior_file_paths, plot_title, iterations = None, 
         parameters.append("chi_p")
         parameters.append("chi1_perp")
         parameters.append("chi2_perp")
+    
     for parameter in parameters:
         print(f"Plotting histogram for {parameter}")
+
         fig, ax = plt.subplots()
         ax.set_title(plot_title)
         ax.set_xlabel(parameter)
         ax.set_yticks([])
-
-        all_data = []
         
+        # get bins
+        all_data = []
         for file_path in sorted_posterior_file_paths:
             if parameter in ["chi_eff", "chiMinus", "chi_p", "chi1", "chi2", "chi1_perp", "chi2_perp"]:
                 data = get_combination_from_mass_and_spin(np.loadtxt(file_path), parameter)
@@ -821,12 +824,7 @@ def plot_histograms(sorted_posterior_file_paths, plot_title, iterations = None, 
                 ax.axvline(x=P.extract_param(parameter_extract)/factor, linestyle="--", linewidth=1.0, color="black")
 
             data_previous = data
-        #try: (this isn't really helpful, so commenting it out)
-        #    likelihood = np.exp(np.array(all_net_data[:,-3]))
-        #    reweighted_all_net = np.random.choice(all_net_data[:,parameter_index], p = likelihood /np.sum(likelihood), size = 1000, replace = True)
-        #    ax.hist(reweighted_all_net, label = "Likelihood", histtype="step", bins = 50, density=True, alpha = 0.7, linewidth=1.0, color = "grey")
-        #except:
-        #    print("Couldn't plot likelihood distribution")
+    
         # don't create legend when only plotting finals iteration's histograms
         if plot_legend: 
             ax.legend(loc = "upper right")
@@ -850,13 +848,21 @@ def plot_corner(sorted_posterior_file_paths, plot_title, iterations = None, para
         parameters.append("dec")
 
     print(f"\n--> Plotting corner plot for params ({plot_title}) {parameters}")
-    max_lnL, no_points = run_diagnostics["max_lnL"], run_diagnostics["high_lnL_points"]  
+
+    # title
+    if "Subdag" in plot_title:
+        subdag_path = find_posteriors_in_sub(path, return_subdag_folder_path=True)
+        _, no_points, max_lnL, _ = get_lnL_cut_points(f"{subdag_path}/all.net", composite=True)
+    else:
+        max_lnL, no_points = run_diagnostics["max_lnL"], run_diagnostics["high_lnL_points"]
     title = f"max_lnL={max_lnL:0.2f},points_cut={no_points}" 
+
+    # Plotting command begins
     plotting_command = f"python {corner_plot_exe} --plot-1d-extra --quantiles None --ci-list [0.9] --use-title {title} "
+
     if plot_title != "extrinsic" and "Main" in plot_title:
         plotting_command += f"--composite-file {all_net_path} --lnL-cut 15 --sigma-cut 0.4 "
     elif plot_title != "extrinsic" and "Subdag" in plot_title:
-        subdag_path = find_posteriors_in_sub(path, return_subdag_folder_path=True)
         plotting_command += f"--composite-file {subdag_path}/all.net --lnL-cut 15 --sigma-cut 0.4 "
 
     # Append iteration-related options to the command
@@ -947,17 +953,23 @@ def plot_JS_divergence(posterior_1_path, posterior_2_path, posterior_3_path=None
         parameters.append("chi_p")
         parameters.append("chi1_perp")
         parameters.append("chi2_perp")
+
     print(f"\n--> Plotting Jensen Shannon Divergence for {parameters} with threshold {threshold}\n")
+
     posterior_data1 = np.loadtxt(posterior_1_path)
     posterior_data2 = np.loadtxt(posterior_2_path)
     if not(posterior_3_path is None):
         posterior_data3 = np.loadtxt(posterior_3_path)
+
     JSD_array = [] # collect for last and second-to-last
     JSD_error = []
+
     JSD_array_third = [] # collect for last and third-to-last
     JSD_error_third = []
+
     run_diagnostics["JSD"][plot_title] = {}
     run_diagnostics["JSD_3"][plot_title] = {}
+
     for parameter in parameters:
         if parameter in ["chi_eff", "chiMinus", "chi_p", "chi1", "chi2", "chi1_perp", "chi2_perp"]:
             data1, data2 = get_combination_from_mass_and_spin(posterior_data1, parameter), get_combination_from_mass_and_spin(posterior_data2, parameter)
@@ -971,17 +983,22 @@ def plot_JS_divergence(posterior_1_path, posterior_2_path, posterior_3_path=None
             if not(posterior_3_path is None):
                 parameter_n = get_index_for_parameter(parameter)
                 JSD_3 = calculate_JS_divergence(posterior_data1[:, parameter_n], posterior_data3[:, parameter_n])
+        
         JSD_array.append(JSD.median)
         JSD_error.append([JSD.minus, JSD.plus])
+        
         run_diagnostics["JSD"][plot_title][parameter] = np.round(JSD.median, 3)
+        
         if not(posterior_3_path is None):
             JSD_array_third.append(JSD_3.median)
             JSD_error_third.append([JSD_3.minus, JSD_3.plus])
             run_diagnostics["JSD_3"][plot_title][parameter] = np.round(JSD_3.median, 3)
+    
     fig, ax = plt.subplots()
     ax.set_title(plot_title)
     ax.set_ylabel("JSD")
     ax.axhline( y = threshold, linewidth = 1.0, linestyle = "--", color = "red")
+    
     if "Main_subdag" in plot_title:
         main_iteration = run_diagnostics["Main"]["latest_iteration"]
         subdag_iteration = run_diagnostics["Subdag"]["latest_iteration"]
@@ -989,6 +1006,7 @@ def plot_JS_divergence(posterior_1_path, posterior_2_path, posterior_3_path=None
     else:
         latest_iteration = run_diagnostics[plot_title.split("_")[0]]["latest_iteration"]
         label_second = f"Iter {latest_iteration} vs Iter {latest_iteration-1}"
+    
     ax.errorbar(parameters, JSD_array, np.array(JSD_error).T, color="royalblue", ecolor="red", fmt='o', markersize=5, label=label_second)
     if posterior_3_path is not None:
         label_third = f"Iter {latest_iteration} vs Iter {latest_iteration-2}"
@@ -1033,8 +1051,11 @@ def write_sample_statistics(posterior, parameters=["mc", "eta", "m1", "m2"], ext
         parameters.append("chi2")
     if use_truths:
         P = lsu.xml_to_ChooseWaveformParams_array(truth_file_path)[0]
+    
     print(f"\n--> Writing sample statistics for parameters: {parameters}")
+    
     posterior = np.loadtxt(posterior)
+    
     f = open(save_path + f"/plots/sample_statistics.txt", "w")
     f.write("Note: limits are equal-tailed 90th percentile\n")
     run_diagnostics["sample_statistics"] = {}
@@ -1142,10 +1163,9 @@ def evaluate_run(run_diagnostics):
         if last_achieved_neff < last_requested_neff:
             f.write(f"\t--> Latest achieved n-eff ({last_achieved_neff}) is below the requested value ({last_requested_neff}).  To address this, try narrowing the parameter space or switching to a different sampler. Alternatively, you can reduce the neff for each CIP job (>10) and increase the number of CIP jobs submitted per iteration.\n")
             neff_is_good = False
-
         if first_requested_neff <= last_achieved_neff < last_requested_neff and first_requested_neff != last_requested_neff:
             if run_diagnostics.get("run_is_complete") == False:
-                f.write(f"\t--> Latest achieved n-eff ({last_achieved_neff}) is below the final target ({last_requested_neff}), although it exceeds the initial target ({first_requested_neff}). Since the run is not complete, this warning can be ignored.\n")
+                f.write(f"\t--> Latest achieved n-eff ({last_achieved_neff}) is below the final target ({last_requested_neff}), although it exceeds the initial target ({first_requested_neff}). Since the run is incomplete, this warning can be ignored.\n")
 
         return neff_is_good
 
@@ -1233,7 +1253,9 @@ def evaluate_run(run_diagnostics):
 
         write_header(f, "Run summary")
         f.write(f"Run directory = {path}\n")
-        f.write(f"Save directory = {save_path}\n")
+        f.write(f"Save directory = {save_path}/plots\n")
+        if run_diagnostics.get("Subdag"):
+            f.write(f"Subdag directory = {find_posteriors_in_sub(path, return_subdag_folder_path=True)}\n")
         f.write(f"LISA analysis = {LISA}\n")
         f.write(f"Eccentric analysis = {eccentricity}\n")
         f.write(f"Precessing analysis = {precessing}\n")
@@ -1302,14 +1324,16 @@ def evaluate_run(run_diagnostics):
             f.write(f"\n{plot_title} CIP summary:\n")
             f.write(f"\tLatest iteration = {diagnostics.get('latest_iteration', 'NA')}\n")
             f.write(f"\tLatest grid = {diagnostics.get('latest_grid', 'NA')}\n")
+            
             latest_iteration = diagnostics.get("latest_iteration", None)
             average_lnL = diagnostics.get("cip_average_max_lnL_sampled", None)
             std_lnL = diagnostics.get("cip_std_max_lnL_sampled", None)
             sampled_lnL = diagnostics.get("cip_sampled_lnL", {})
+            
             if latest_iteration is None:
-                f.write(f"\tAverage max lnL sampled by CIP = {average_lnL} +/- {std_lnL}\n")
+                f.write(f"\tAverage max lnL sampled by CIP = {average_lnL:0.2f} (+{std_lnL[0]:0.2f}, -{std_lnL[1]:0.2f})\n")
             else:
-                f.write(f"\tAverage max lnL sampled by CIP in iteration {latest_iteration} = {average_lnL} +/- {std_lnL}\n")
+                f.write(f"\tAverage max lnL sampled by CIP in iteration {latest_iteration} = {average_lnL:0.2f} (+{std_lnL[0]:0.2f}, -{std_lnL[1]:0.2f})\n")
             if "max_lnL" in run_diagnostics:
                 f.write(f"\tMaximum lnL in all.net = {run_diagnostics['max_lnL']}\n")
             
@@ -1344,7 +1368,7 @@ def evaluate_run(run_diagnostics):
         f.write("\t 1) Is the 90% credible interval mostly around the red points? If not, it could be that the run needs more iterations. If the SNR < 30, then the prior might impact it and the shift is expected.")
         f.write(f"\n\t 2) Has the parameter space been sufficiently explored? Are there blue points around the red points? Continuing the run will help if this is true with {run_diagnostics['Main']['latest_grid']} as your starting grid and copying this run's all.net as bonus.composite in your new run directory")
         f.write("\n\t 3) Is the approximate SNR captured close to True SNR? A significant difference implies the inference got stuck at a local lnL maxima. Happens rarely")
-    print("###########################################################################################")
+    print("\n###########################################################################################")
     print("# Run diagnostics")
     print("###########################################################################################")
     print(f"Diagnostics written to {diagnostics_path}")
@@ -1571,5 +1595,6 @@ if check_extrinsic_present(path):
     write_sample_statistics(f"{path}/extrinsic_posterior_samples.dat", extrinsic = True)
     plot_log_likelihood(path)
     run_diagnostics['run_is_complete'] = True
+
 # run diagnostics
 evaluate_run(run_diagnostics)
